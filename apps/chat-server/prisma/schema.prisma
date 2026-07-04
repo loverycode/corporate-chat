@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ChannelType {
+  direct 
+  group 
+  context
+}
+
+enum ChannelRole {
+  owner 
+  member
+}
+
+model UsersCache {
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String
+  email           String
+  avatarUrl       String?          @map("avatar_url")
+  lastSeenAt      DateTime         @default(now()) @map("last_seen_at")
+
+  createdChannels Channels[]       @relation("ChannelCreator")
+  memberships     ChannelMembers[] @relation("Memberships")
+  messages        Messages[]       @relation("UserMessages")
+  files           Attachments[]    @relation("FileUploader")
+  reactions       Reactions[]      @relation("UserReaction")
+  @@map("users_cache")
+}
+
+model Channels {
+  id              String      @id @default(uuid()) @db.Uuid
+  type            ChannelType
+  title           String
+  contextObjectId String?      @db.Uuid @map("context_object_id")
+  createdBy       String       @db.Uuid  @map("created_by")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  archivedAt      DateTime?    @map("archived_at")
+
+  creator UsersCache @relation("ChannelCreator", fields: [createdBy], references: [id])
+  members         ChannelMembers[] @relation("ChannelMembers")
+  messages        Messages[]       @relation("ChannelMessages")
+
+  @@map("channels")
+}
+
+model ChannelMembers {
+  channelId         String       @db.Uuid        @map("channel_id")
+  userId            String       @db.Uuid        @map("user_id")
+  role              ChannelRole 
+  lastReadMessageId String?      @db.Uuid        @map("last_read_message_id")
+  muted             Boolean      @default(false)
+  joinedAt          DateTime     @default(now()) @map("joined_at")
+
+  channel Channels @relation("ChannelMembers", fields: [channelId], references: [id])
+  user UsersCache @relation("Memberships", fields: [userId], references: [id])
+  @@map("channel_members")
+  @@id([channelId, userId])
+}
+
+model Messages {
+  id        String @id @default(uuid()) @db.Uuid
+  channelId String @db.Uuid @map("channel_id")
+  authorId  String @db.Uuid @map("author_id")
+  bodyMd    String @map("body_md")
+  replyToId String? @db.Uuid @map("reply_to_id")
+  clientMessageId String @db.Uuid @map("client_message_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  editedAt DateTime?  @map("edited_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  channel Channels @relation("ChannelMessages", fields: [channelId], references: [id])
+
+  author UsersCache @relation("UserMessages", fields: [authorId], references: [id])
+
+  replyTo Messages? @relation("MessageReplies", fields: [replyToId], references: [id])
+
+  replies Messages[] @relation("MessageReplies")
+  files   Attachments[] @relation("MessageFile")
+  refs    ObjectRefs[] @relation("MessageRef")
+  reactions Reactions[] @relation("MessageReaction")
+
+  @@index([channelId, id(sort:Desc)])
+  @@unique([channelId, clientMessageId])
+  @@map("messages")
+
+}
+
+model Attachments {
+  id         String @id @default(uuid()) @db.Uuid
+  messageId  String? @db.Uuid @map("message_id")
+  uploaderId String @db.Uuid @map("uploader_id")
+  fileName   String @map("file_name")
+  mime       String
+  size       Int
+  storageKey String @map("storage_key")
+  thumbKey   String? @map("thumb_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  message Messages? @relation("MessageFile", fields: [messageId], references: [id])
+  uploader UsersCache @relation("FileUploader", fields: [uploaderId], references: [id])
+  @@map("attachments")
+}
+
+model ObjectRefs {
+  id String  @id @default(uuid()) @db.Uuid
+  messageId String @db.Uuid @map("message_id")
+  objectId String @db.Uuid @map("object_id")
+  snapshotTitle String @map("snapshot_title")
+  snapshotTypeName String @map("snapshot_type_name")
+  snapshotIcon String @map("snapshot_icon")
+
+  message Messages @relation("MessageRef", fields: [messageId], references: [id])
+
+  @@map("object_refs")
+}
+
+model Reactions {
+  messageId String  @db.Uuid @map("message_id")
+  userId    String  @db.Uuid @map("user_id")
+  emoji     String
+
+  message Messages @relation("MessageReaction", fields: [messageId], references: [id])
+  reactionUser UsersCache @relation("UserReaction", fields: [userId], references: [id])
+
+  @@id([messageId, userId, emoji])
+  @@map("reactions")
+}
