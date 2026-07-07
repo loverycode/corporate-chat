@@ -9,9 +9,8 @@ export class UsersService {
     }
     async findById(id: string){
         return this.prisma.usersCache.findUnique({
-            where: {
-                id,
-             }
+            where: {id}
         });
     }
+
 }
