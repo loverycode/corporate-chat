@@ -8,3 +8,4 @@ CREATE TABLE "users_cache" (
 
     CONSTRAINT "users_cache_pkey" PRIMARY KEY ("id")
 );
+ 

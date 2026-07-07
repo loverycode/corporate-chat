@@ -18,7 +18,7 @@ CREATE TABLE "channels" (
     "archived_at" TIMESTAMP(3),
 
     CONSTRAINT "channels_pkey" PRIMARY KEY ("id")
-);
+); 
 
 -- CreateTable
 CREATE TABLE "channel_members" (
