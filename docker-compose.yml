@@ -2,7 +2,7 @@ services:
   postgres:
     image: postgres:16
     container_name: corporate-chat-db
-    restart: always
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -11,5 +11,38 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  minio:
+    image: minio/minio
+    container-name: corporate-minio
+    restart: unless-stopped
+    command: server/data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  portal-mock:
+    build:
+      context: ./apps/portal-mock
+    container-name: portal-mock
+    restart: unless-stopped
+    ports: -"3001:3000"
+
+  chat-server:
+    build: ./apps/chat-server
+    container-name: "corporate-chat"
+    restart: unless-stopped
+    ports: -"3000:3000"
+    env_file: -.env
+    depends_on: -postgres
+      -minio
+      -portal-mock
+
 volumes:
   postgres_data:
+  minio_data:
