@@ -8,6 +8,8 @@ on:
     branches:
       - master
       - main
+  workflow_dispatch:
+
 jobs:
   build:
     name: Build chat-server
@@ -29,8 +31,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check DATABASE_URL
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL is EMPTY"
+            exit 1
+          else
+            echo "DATABASE_URL is SET"
+          fi
+
       - name: Generate Prisma Client
         run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Build project
         run: npm run build
