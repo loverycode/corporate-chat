@@ -12,11 +12,7 @@ export class JwtStrategy extends PassportStrategy(Strategy){
             secretOrKey: process.env.JWT_SECRET!,
         });
     }
-    async validate(payload : {sub:string}){
-                const user= await this.usersService.findById(payload.sub)
-                if (!user){
-                    throw new UnauthorizedException();
-                }
-                return user;
+    async validate(payload : {sub: string; name: string; email: string; role: string }){
+                return this.usersService.upsertFromToken(payload);
             }
 }

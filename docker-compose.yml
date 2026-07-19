@@ -14,9 +14,9 @@ services:
 
   minio:
     image: minio/minio
-    container-name: corporate-minio
+    container_name: corporate-minio
     restart: unless-stopped
-    command: server/data --console-address ":9001"
+    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: password
@@ -29,19 +29,25 @@ services:
   portal-mock:
     build:
       context: ./apps/portal-mock
-    container-name: portal-mock
+    container_name: portal-mock
     restart: unless-stopped
-    ports: -"3001:3000"
+    ports:
+      - "3001:3000"
 
   chat-server:
     build: ./apps/chat-server
-    container-name: "corporate-chat"
+    container_name: "corporate-chat"
     restart: unless-stopped
-    ports: -"3000:3000"
-    env_file: -.env
-    depends_on: -postgres
-      -minio
-      -portal-mock
+    working_dir: /app
+    command: npm run start:dev
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - minio
+      - portal-mock
 
 volumes:
   postgres_data:

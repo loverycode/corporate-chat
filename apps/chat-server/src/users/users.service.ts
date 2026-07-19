@@ -12,5 +12,12 @@ export class UsersService {
             where: {id}
         });
     }
+    async upsertFromToken(payload:{sub: string, name: string, email: string}){
+        return this.prisma.usersCache.upsert({
+            where: {id: payload.sub},
+            update: {name: payload.name, email: payload.email},
+            create: {id: payload.sub, name: payload.name, email: payload.email},
+        });
+    }
 
 }

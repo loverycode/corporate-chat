@@ -42,7 +42,7 @@ model UsersCache {
 model Channels {
   id              String      @id @default(uuid()) @db.Uuid
   type            ChannelType
-  title           String
+  title           String?
   contextObjectId String?      @db.Uuid @map("context_object_id")
   createdBy       String       @db.Uuid  @map("created_by")
   createdAt       DateTime     @default(now()) @map("created_at")
