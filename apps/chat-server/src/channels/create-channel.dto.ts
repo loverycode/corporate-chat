@@ -13,6 +13,6 @@ export class CreateChannelDto{
     contextObjectId?:string;
 
     @IsArray()
-    @IsUUID('4', {each: true})
+    @IsUUID('all', {each: true})
     members:string[];
 }
