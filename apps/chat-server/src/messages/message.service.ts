@@ -52,7 +52,7 @@ export class MessagesService{
         await this.assertMember(channelId, userId);
         return this.prisma.messages.findMany({
             where:{channelId},
-            orderBy:{id: 'desc'},
+            orderBy:[{createdAt: 'desc'}, {id: 'desc'}],
             take: limit, ...(cursor ? {skip:1, cursor: {id: cursor}}:{})
         });
     }
