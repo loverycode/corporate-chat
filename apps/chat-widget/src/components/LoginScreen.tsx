@@ -15,7 +15,7 @@ export function LoginScreen({onLogin}: {onLogin: (userId: string, userName: stri
         setLoading(userId);
         setError(null);
         try{
-            const {token} = await api.devLogin(userId, name);
+            const {token} = await api.getToken(userId);
             setAuthToken(token);
             onLogin(userId, name);
         }catch(err){

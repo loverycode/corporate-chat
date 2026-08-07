@@ -6,9 +6,10 @@ import { UsersModule } from './users/users.module';
 import { ChannelsModule } from './channels/channels.module';
 import { MessagesModule } from './messages/messages.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, ChannelsModule, MessagesModule],
+  imports: [PrismaModule, AuthModule, UsersModule, ChannelsModule, MessagesModule, StorageModule],
   controllers: [AppController],
   providers: [AppService],
 })

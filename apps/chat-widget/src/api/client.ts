@@ -1,6 +1,6 @@
 import type {Channel, Message} from './types';
 const API_URL = 'http://127.0.0.1:3000';
-
+const PORTAL_URL = 'http://127.0.0.1:3001';
 let authToken: string | null = null;
 
 export function setAuthToken(token: string) {
@@ -28,11 +28,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-    devLogin: (userId: string, name: string) =>
-        request<{ token: string }>('/auth/dev-login', {
-            method: 'POST',
-            body: JSON.stringify({ userId, name }),
-        }),
+    getToken: (userId: string) => fetch(
+        `${PORTAL_URL}/auth/token/${userId}`).then((r) => r.json()) as Promise<{ token: string }>,
     getChannels: () => request<Channel[]>('/channels'),
     getMessages: (channelId: string, cursor?: string)=> request<Message[]>(`/channels/${channelId}/messages${cursor ? `?cursor=${cursor}` : ''}`),
     sendMessage: (channelId: string, bodyMd: string, clientMessageId: string)=>
