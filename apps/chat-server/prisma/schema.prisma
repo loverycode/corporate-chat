@@ -90,6 +90,7 @@ model Messages {
   files   Attachments[] @relation("MessageFile")
   refs    ObjectRefs[] @relation("MessageRef")
   reactions Reactions[] @relation("MessageReaction")
+  mentions  Mentions[]  @relation("MessageMention")
 
   @@index([channelId, id(sort:Desc)])
   @@unique([channelId, clientMessageId])
@@ -136,4 +137,16 @@ model Reactions {
 
   @@id([messageId, userId, emoji])
   @@map("reactions")
+}
+
+
+model Mentions{ 
+  id              String    @id             @default(uuid()) @db.Uuid
+  messageId       String    @db.Uuid        @map("message_id")
+  mentionedUserId String    @db.Uuid        @map("mentioned_user_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  message Messages @relation("MessageMention", fields: [messageId], references: [id])
+  @@map("mentions")
+  @@index([mentionedUserId])
 }

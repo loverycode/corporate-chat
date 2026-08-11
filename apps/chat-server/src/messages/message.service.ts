@@ -19,6 +19,17 @@ export class MessagesService{
         }
     }
 
+    private extractMentionedUserIds(bodyMd: string): string[]{
+        const ids = new Set<string>();
+        const pattern = /<@([0-9a-fA-F-]{36})>/g;
+        let match;
+        while((match=pattern.exec(bodyMd))!== null){
+            ids.add(match[1]);
+        }
+        return Array.from(ids);
+    }
+
+
     async create(channelId: string, dto: CreateMessageDto, authorId: string){
         await this.assertMember(channelId, authorId);
         const existing = await this.prisma.messages.findUnique({
@@ -64,12 +75,32 @@ export class MessagesService{
                 }
             }
         }
-        const messageWithRefs = await this.prisma.messages.findUnique({
-            where:{id: message.id},
-            include:{refs: true},
+
+        const mentionedIds = this.extractMentionedUserIds(dto.bodyMd);
+        if (mentionedIds.length > 0) {
+            const members = await this.prisma.channelMembers.findMany({
+                where: { channelId, userId: { in: mentionedIds } },
+                select: { userId: true },
+            });
+            const validMemberIds = new Set(members.map((m) => m.userId));
+
+            for (const userId of mentionedIds) {
+                if (validMemberIds.has(userId)) {
+                    await this.prisma.mentions.create({
+                        data: { messageId: message.id, mentionedUserId: userId },
+                    });
+                }
+            }
+        }
+
+
+        const messageWithRelations = await this.prisma.messages.findUnique({
+            where: {id: message.id},
+            include: {refs: true, mentions: true},
         });
-        this.gateway.emitMessageCreated(channelId, messageWithRefs);
-        return messageWithRefs;
+
+        this.gateway.emitMessageCreated(channelId, messageWithRelations);
+        return messageWithRelations;
     }
 
     async findHistory(channelId: string, userId: string, cursor?: string, limit = 30){
@@ -78,7 +109,7 @@ export class MessagesService{
             where:{channelId},
             orderBy:[{createdAt: 'desc'}, {id: 'desc'}],
             take: limit, 
-            include: {refs: true},
+            include: {refs: true, mentions: true},
             ...(cursor ? {skip:1, cursor: {id: cursor}}:{})
         });
     }
