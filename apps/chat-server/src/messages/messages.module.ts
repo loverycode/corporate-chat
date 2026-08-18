@@ -5,6 +5,7 @@ import { MessagesGateway } from './messages.gateway';
 import { PrismaModule } from '../prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ObjectsModule } from 'src/objects/objects.module';
+import { MessageActionsController } from './messages-actions.controller';
 
 @Module({
     imports: [
@@ -12,8 +13,8 @@ import { ObjectsModule } from 'src/objects/objects.module';
         JwtModule.register({}),
         ObjectsModule,
     ],
-    controllers: [MessagesController],
+    controllers: [MessagesController, MessageActionsController],
     providers: [MessagesService, MessagesGateway],
-    exports: [MessagesService],
+    exports: [MessagesService, MessagesGateway],
 })
 export class MessagesModule {}

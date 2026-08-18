@@ -3,9 +3,18 @@ import { randomUUID} from "crypto";
 import sharp from 'sharp';
 import { PrismaService } from "src/prisma/prisma.service";
 import { StorageService } from "src/storage/storage.service";
-
+import {fileTypeFromBuffer} from 'file-type';
 const MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20 МБ
-const ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf', 'text/'];
+const DANGEROUS_MIME_TYPES = [
+    'application/x-msdownload',       
+    'application/x-executable',
+    'application/x-sh',
+    'application/x-bat',
+    'application/x-msdos-program',
+    'application/vnd.microsoft.portable-executable',
+    'application/java-archive',       
+];
+const DANGEROUS_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.com', '.msi', '.scr', '.jar', '.app'];
 
 @Injectable()
 export class AttachmentsService{
@@ -13,14 +22,23 @@ export class AttachmentsService{
         private readonly prisma: PrismaService,
         private readonly storage: StorageService,
     ){}
-    async uploadFile(file: Express.Multer.File, uploaderId: string, channelId: string){
-        if (file.size> MAX_SIZE_BYTES){
+
+    async uploadFile(file: Express.Multer.File, uploaderId: string, channelId: string) {
+        if (file.size > MAX_SIZE_BYTES) {
             throw new BadRequestException('file too large');
         }
-        const isAllowed = ALLOWED_MIME_PREFIXES.some((prefix)=>file.mimetype.startsWith(prefix));
-        if (!isAllowed){
+
+        const lowerName = file.originalname.toLowerCase();
+        if (DANGEROUS_EXTENSIONS.some((ext) => lowerName.endsWith(ext))) {
             throw new BadRequestException('file type not allowed');
         }
+        const detected = await fileTypeFromBuffer(file.buffer);
+        const realMime = detected?.mime || file.mimetype; 
+        if (DANGEROUS_MIME_TYPES.includes(realMime)) {
+            throw new BadRequestException('file type not allowed');
+        }
+
+        const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
         const fileId = randomUUID();
         const storageKey = `channels/${channelId}/${fileId}-${file.originalname}`;
 
@@ -35,7 +53,7 @@ export class AttachmentsService{
         return this.prisma.attachments.create({
             data:{
                 uploaderId,
-                fileName: file.originalname,
+                fileName,
                 mime: file.mimetype,
                 size: file.size,
                 storageKey,

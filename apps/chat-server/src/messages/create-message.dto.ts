@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import { IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
 
 export class CreateMessageDto{
     @IsString()
@@ -8,8 +8,14 @@ export class CreateMessageDto{
 
     @IsOptional()
     @IsUUID()
-    replyToId: string;
+    replyToId?: string;
 
     @IsUUID()
     clientMessageId: string;
+
+    @IsOptional()
+    @IsArray()
+    @IsUUID('4', {each:true})
+    attachmentIds?: string[];
+
 }

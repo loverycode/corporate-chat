@@ -3,6 +3,7 @@ import { CreateMessageDto } from "./create-message.dto";
 import { ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { MessagesGateway } from "./messages.gateway";
 import { ObjectsService } from "src/objects/objects.service";
+import { UpdateMessageDto } from "./update-message.dto";
 
 @Injectable()
 export class MessagesService{
@@ -92,25 +93,79 @@ export class MessagesService{
                 }
             }
         }
-
+        if (dto.attachmentIds && dto.attachmentIds.length>0){
+            await this.prisma.attachments.updateMany({
+                where:{
+                    id: {in: dto.attachmentIds},
+                    uploaderId: authorId,
+                    messageId: null,
+                },
+                data:{messageId:message.id},
+            })
+        }
 
         const messageWithRelations = await this.prisma.messages.findUnique({
             where: {id: message.id},
-            include: {refs: true, mentions: true},
+            include: {refs: true, mentions: true, files: true, reactions: true, replyTo:{select:{id: true, bodyMd: true, authorId: true, deletedAt: true}}},
         });
 
         this.gateway.emitMessageCreated(channelId, messageWithRelations);
         return messageWithRelations;
+    } 
+
+    async update(messageId: string, dto: UpdateMessageDto, userId: string){
+        const message = await this.prisma.messages.findUnique({
+            where:{id: messageId},
+        });
+        if (!message || message.deletedAt){
+            throw new NotFoundException('message not found');
+        }
+        if (message.authorId!==userId){
+            throw new ForbiddenException('cannot edit a message you did not author');
+        }
+        const updated = await this.prisma.messages.update({
+            where: { id: messageId },
+            data: { bodyMd: dto.bodyMd, editedAt: new Date() },
+            include: { refs: true, mentions: true, files: true, reactions: true },
+        });
+        this.gateway.emitMessageUpdated(message.channelId, updated);
+        return updated;
     }
+
+    async remove(messageId: string, userId: string){
+        const message = await this.prisma.messages.findUnique({
+            where:{id: messageId},
+        });
+        if (!message || message.deletedAt){
+            throw new NotFoundException('message not found');
+        }
+        if (message.authorId!==userId){
+            throw new ForbiddenException('cannot edit a message you did not author');
+        }
+        const deleted = await this.prisma.messages.update({
+            where: { id: messageId },
+            data: { deletedAt: new Date() },
+        });
+        this.gateway.emitMessageDeleted(message.channelId, messageId);
+        return {ok: true};
+    }
+
 
     async findHistory(channelId: string, userId: string, cursor?: string, limit = 30){
         await this.assertMember(channelId, userId);
-        return this.prisma.messages.findMany({
+        const messages = await this.prisma.messages.findMany({
             where:{channelId},
             orderBy:[{createdAt: 'desc'}, {id: 'desc'}],
             take: limit, 
-            include: {refs: true, mentions: true},
+            include: {refs: true, mentions: true, files: true, reactions: true, replyTo:{select: {id: true, bodyMd: true, authorId: true, deletedAt: true}}},
             ...(cursor ? {skip:1, cursor: {id: cursor}}:{})
         });
+        return messages.map((m)=>this.maskDeleted(m));
     }
+
+    private maskDeleted<T extends { deletedAt: Date | null; bodyMd: string; files: unknown[] }>(message: T): T {
+        if (!message.deletedAt) return message;
+        return { ...message, bodyMd: '', files: [] };
+    }
+
 }

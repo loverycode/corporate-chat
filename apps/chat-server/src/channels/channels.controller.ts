@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, Req, UseGuards } from "@nestjs/common";
+import { Controller, Post, Get, Body, Param, Req, UseGuards, Put } from "@nestjs/common";
 import { CreateChannelDto } from "./create-channel.dto";
 import { ChannelsService } from "./channels.service";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -19,5 +19,10 @@ export class ChannelsController{
     @Get(':id')
     findOne(@Param('id') id:string, @Req() req){
         return this.channelsService.findById(id, req.user.id);
+    }
+
+    @Put(':id/read-mark')
+    markRead(@Param('id') channelid: string, @Body() body:{messageId: string}, @Req() req){
+        return this.channelsService.markRead(channelid, req.user.id, body.messageId);
     }
 }

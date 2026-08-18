@@ -2,9 +2,12 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { CreateChannelDto } from "./create-channel.dto"
 import { PrismaService } from "../prisma/prisma.service"
 import { ChannelRole, ChannelType } from "@prisma/client";
+import { MessagesGateway } from "src/messages/messages.gateway";
 @Injectable()
 export class ChannelsService{
-    constructor(private readonly prisma: PrismaService){}
+    constructor(private readonly prisma: PrismaService, 
+                private readonly getway: MessagesGateway,
+    ){}
     private validateCreateChannel(dto: CreateChannelDto){
         if (dto.type===ChannelType.direct){
             if (!dto.members || dto.members.length!==2){
@@ -128,21 +131,87 @@ export class ChannelsService{
 
     }
 
-    async findUserChannels(currentUserId: string){
+    async findUserChannels(currentUserId: string) {
         const channels = await this.prisma.channels.findMany({
-            where:{
-                members: {some:{userId: currentUserId}}
+            where: {
+                members: { some: { userId: currentUserId } },
             },
             include: {
-                messages: {orderBy: {createdAt: 'desc'}, take:1},
+                messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+                members: { where: { userId: currentUserId } },
             },
         });
-        return channels.map((channel)=>({...channel, lastMessage: channel.messages[0] ?? null})).sort(
-            (a,b)=>{
-                const aTime=(a.lastMessage?.createdAt ?? a.createdAt).getTime();
-                const bTime=(b.lastMessage?.createdAt ?? b.createdAt).getTime();
-                return bTime - aTime;
-            }
+
+        const result = await Promise.all(
+            channels.map(async (channel) => {
+                const membership = channel.members[0];
+                const unreadCount = await this.prisma.messages.count({
+                    where: {
+                        channelId: channel.id,
+                        deletedAt: null,
+                        ...(membership?.lastReadMessageId
+                            ? { createdAt: { gt: await this.getMessageCreatedAt(membership.lastReadMessageId) } }
+                            : {}),
+                    },
+                });
+                return {
+                    ...channel,
+                    lastMessage: channel.messages[0] ?? null,
+                    unreadCount,
+                };
+            }),
         );
+
+        return result.sort((a, b) => {
+            const aTime = (a.lastMessage?.createdAt ?? a.createdAt).getTime();
+            const bTime = (b.lastMessage?.createdAt ?? b.createdAt).getTime();
+            return bTime - aTime;
+        });
+    }
+
+    async markRead(channelId: string, userId: string, messageId: string){
+        const message = await this.prisma.messages.findUnique({
+            where: {id: messageId},
+        });
+        if (!message || message.channelId!==channelId){
+            throw new NotFoundException('message not found in this channel');
+        }
+        await this.prisma.channelMembers.update({
+            where:{channelId_userId:{channelId, userId}},
+            data:{lastReadMessageId: messageId},
+        });
+        const summary = await this.getUnreadSummary(userId);
+        this.getway.emitUnreadChanged(userId, summary.total, channelId, summary.perChannel[channelId] ?? 0);
+        return {ok: true};
+    };
+
+    async getUnreadSummary(userId: string){
+        const memberships = await this.prisma.channelMembers.findMany({
+            where:{userId},
+            select:{channelId: true, lastReadMessageId: true},
+        });
+
+        const perChannel: Record<string, number> = {};
+        let total = 0;
+        for (const membership of memberships){
+            const count = await this.prisma.messages.count({
+                where:{
+                    channelId: membership.channelId,
+                    deletedAt: null,
+                    ...(membership.lastReadMessageId ? {createdAt:{gt: await this.getMessageCreatedAt(membership.lastReadMessageId)}} : {}),
+                }
+            });
+            perChannel[membership.channelId]=count;
+            total+=count;
+        }
+        return{total, perChannel};
+    }
+
+    private async getMessageCreatedAt(messageId: string): Promise<Date>{
+        const message = await this.prisma.messages.findUnique({
+            where:{id: messageId},
+            select:{createdAt: true},
+        });
+        return message?.createdAt ?? new Date(0);
     }
 }
