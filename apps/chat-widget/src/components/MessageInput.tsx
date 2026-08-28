@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import type { Attachment } from "../api/types";
 import { getSocket } from "../api/socket";
 import CloseIcon from '@mui/icons-material/Close';
+import { useTranslation } from "../i18n/localeContext";
 
 export function MessageInput({channelId, onSend, members, editingMessage, onCancelEdit, onEditSubmit, replyingTo, onCancelReply}: {
     channelId: string; onSend: (text: string, attachmentIds: string[]) => Promise<boolean>;
@@ -22,6 +23,7 @@ export function MessageInput({channelId, onSend, members, editingMessage, onCanc
     const [mentionAnchor, setMentionAnchor] = useState<HTMLElement | null>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const typingThrottleRef = useRef<number>(0);
+    const {t}=useTranslation();
 
     useEffect(() => {
         if (editingMessage) {
@@ -111,7 +113,7 @@ export function MessageInput({channelId, onSend, members, editingMessage, onCanc
         <Box sx={{ borderTop: 1, borderColor: 'divider', p: 2, position: 'relative' }}>
             {editingMessage && (
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption" color="text.secondary">Редактирование сообщения</Typography>
+                    <Typography variant="caption" color="text.secondary">{t('editingMessage')}</Typography>
                     <IconButton size="small" onClick={() => { setText(''); onCancelEdit(); }}>
                         <CloseIcon fontSize="small" />
                     </IconButton>
@@ -121,7 +123,7 @@ export function MessageInput({channelId, onSend, members, editingMessage, onCanc
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                     <Box>
                         <Typography variant="caption" color="text.primary" sx={{ fontWeight: 600, display: 'block' }}>
-                            Ответ для {replyingTo.authorName}
+                            {t('replyTo')} {replyingTo.authorName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', maxWidth: 300 }}>
                             {replyingTo.bodyMd}
@@ -162,7 +164,7 @@ export function MessageInput({channelId, onSend, members, editingMessage, onCanc
                         multiline
                         maxRows={4}
                         size="small"
-                        placeholder="Написать сообщение..."
+                        placeholder={t('writeMessage')}
                         value={text}
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}

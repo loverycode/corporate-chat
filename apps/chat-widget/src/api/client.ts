@@ -1,4 +1,4 @@
-import type {Channel, Message, Attachment, ChannelMember} from './types';
+import {type Channel, type Message, type Attachment, type ChannelMember, type SearchResult} from './types';
 const API_URL = 'http://127.0.0.1:3000';
 const PORTAL_URL = 'http://127.0.0.1:3001';
 let authToken: string | null = null;
@@ -51,4 +51,10 @@ export const api = {
     editMessage:(messageId: string, bodyMd: string)=>request<Message>(`/messages/${messageId}`, {method:'PATCH', body: JSON.stringify({bodyMd})}),
     deleteMessage: (messageId: string) =>request<{ ok: boolean }>(`/messages/${messageId}`, { method: 'DELETE' }),
     getPortalUsers: () => fetch(`${PORTAL_URL}/users`).then((r) => r.json()) as Promise<{ id: string; name: string }[]>,
-    createChannel: (type: string, members: string[], title?: string) =>request<Channel>('/channels', { method: 'POST', body: JSON.stringify({ type, members, title }) }),}
+    createChannel: (type: string, members: string[], title?: string, contextObjectId?: string) =>request<Channel>('/channels', { method: 'POST', body: JSON.stringify({ type, members, title, contextObjectId }) }),
+    addReaction: (messageId: string, emoji: string)=>request<{ok: boolean}>(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: 'PUT' }),
+    removeReaction: (messageId: string, emoji: string)=>request<{ok: boolean}>(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: 'DELETE' }),
+    getOnlinePresence: () => request<string[]>('/presence'),
+    search: (query: string, channelId?: string)=>request<SearchResult[]>(`/search?q=${encodeURIComponent(query)}${channelId ? `&channelId=${channelId}` : ''}`),
+    getMessagePosition: (channelId: string, messageId: string) => request<{ newerCount: number }>(`/channels/${channelId}/messages/${messageId}/position`),
+}

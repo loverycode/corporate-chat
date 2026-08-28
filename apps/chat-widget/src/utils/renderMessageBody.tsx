@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { ObjectRef } from "../api/types";
-
+import { sendOpenObject } from "../postMessage";
 const OBJECT_LINK_PATTERN = /https?:\/\/[^\s/]+\/dashboard\/object\/([0-9a-fA-F-]{36})/g;
 const MENTION_PATTERN = /<@([0-9a-fA-F-]{36})>/g;
 
@@ -54,7 +54,7 @@ function ObjectCard({ref}: {ref?: ObjectRef}){
         return <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>[Объект недоступен]</span>;
     }
     return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fafafa', fontSize: '0.85em' }}>
+        <span  onClick={()=>sendOpenObject(ref.objectId)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fafafa', fontSize: '0.85em' }}>
              {ref.snapshotTypeName}: {ref.snapshotTitle}
         </span>
     );

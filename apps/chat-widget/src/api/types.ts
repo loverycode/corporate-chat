@@ -37,6 +37,7 @@ export interface Message {
     refs:  ObjectRef[];
     mentions: Mention[];
     replyTo: { id: string; bodyMd: string; authorId: string; deletedAt: string | null } | null;
+    reactions: Reaction[];
 }
 
 export interface Attachment {
@@ -62,3 +63,20 @@ export interface Mention{
     mentionedUserId: string;   
 }
 
+export interface Reaction {
+    id: string;
+    messageId: string;
+    userId: string;
+    emoji: string;
+    createdAt: string;
+}
+
+export interface SearchResult {
+    id: string;
+    channelId: string;
+    authorId: string;
+    bodyMd: string;
+    createdAt: Date;
+    headline: string;
+}
+ 
