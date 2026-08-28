@@ -91,7 +91,7 @@ model Messages {
   refs    ObjectRefs[] @relation("MessageRef")
   reactions Reactions[] @relation("MessageReaction")
   mentions  Mentions[]  @relation("MessageMention")
-
+  searchVector Unsupported("tsvector")? @map("search_vector")
   @@index([channelId, id(sort:Desc)])
   @@unique([channelId, clientMessageId])
   @@map("messages")
