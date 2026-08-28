@@ -1,40 +1,88 @@
-name: Chat Server CI
+name: CI
+
 on:
-  push:
-    branches:
-      - master
-      - main
   pull_request:
-    branches:
-      - master
-      - main
-  workflow_dispatch:
+    branches: [main, master]
+  push:
+    branches: [main, master]
 
 jobs:
-  build:
-    name: Build chat-server
+  chat-server:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: corporate_chat_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: apps/chat-server
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: "20"
+          cache: "npm"
           cache-dependency-path: apps/chat-server/package-lock.json
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Lint
+        run: npm run lint
 
-      - name: Build project
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Run migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corporate_chat_test?schema=public
+
+      - name: Unit tests
+        run: npm run test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corporate_chat_test?schema=public
+          JWT_SECRET: test-secret-for-ci
+
+      - name: E2E tests
+        run: npm run test:e2e
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corporate_chat_test?schema=public
+          JWT_SECRET: test-secret-for-ci
+
+  chat-widget:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/chat-widget
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/chat-widget/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
         run: npm run build
