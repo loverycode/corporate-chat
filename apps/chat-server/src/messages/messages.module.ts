@@ -6,15 +6,11 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 import { ObjectsModule } from 'src/objects/objects.module';
 import { MessageActionsController } from './messages-actions.controller';
-
+import { EventsModule } from 'src/events/events.module';
 @Module({
-    imports: [
-        PrismaModule,
-        JwtModule.register({}),
-        ObjectsModule,
-    ],
-    controllers: [MessagesController, MessageActionsController],
-    providers: [MessagesService, MessagesGateway],
-    exports: [MessagesService, MessagesGateway],
+  imports: [PrismaModule, JwtModule.register({}), ObjectsModule, EventsModule],
+  controllers: [MessagesController, MessageActionsController],
+  providers: [MessagesService, MessagesGateway],
+  exports: [MessagesService, MessagesGateway],
 })
 export class MessagesModule {}

@@ -1,21 +1,27 @@
-import { IsArray, IsOptional, IsString, IsUUID, MaxLength, MinLength } from "class-validator";
+import {
+  IsArray,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
-export class CreateMessageDto{
-    @IsString()
-    @MinLength(1)
-    @MaxLength(10000)
-    bodyMd: string;
+export class CreateMessageDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10000)
+  bodyMd: string;
 
-    @IsOptional()
-    @IsUUID()
-    replyToId?: string;
+  @IsOptional()
+  @IsUUID()
+  replyToId?: string;
 
-    @IsUUID()
-    clientMessageId: string;
+  @IsUUID()
+  clientMessageId: string;
 
-    @IsOptional()
-    @IsArray()
-    @IsUUID('4', {each:true})
-    attachmentIds?: string[];
-
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  attachmentIds?: string[];
 }
