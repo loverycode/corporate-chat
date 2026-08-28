@@ -9,10 +9,33 @@ import { PrismaModule } from './prisma/prisma.module';
 import { StorageModule } from './storage/storage.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { ReactionsModule } from './reactions/reactions.module';
-
+import { SearchModule } from './search/search.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
+import { HealthModule } from './health/health.module';
+import { LoggerModule } from 'nestjs-pino';
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, ChannelsModule, MessagesModule, StorageModule, AttachmentsModule, ReactionsModule],
+  imports: [
+    LoggerModule.forRoot({
+      pinoHttp: {
+        genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
+        customProps: (req) => ({ requestId: req.id }),
+        level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+      },
+    }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    PrismaModule,
+    AuthModule,
+    UsersModule,
+    ChannelsModule,
+    MessagesModule,
+    StorageModule,
+    AttachmentsModule,
+    ReactionsModule,
+    SearchModule,
+    HealthModule,
+  ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
