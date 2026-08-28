@@ -1,28 +1,51 @@
-import { Controller, Post, Get, Body, Param, Req, UseGuards, Put } from "@nestjs/common";
-import { CreateChannelDto } from "./create-channel.dto";
-import { ChannelsService } from "./channels.service";
-import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  Put,
+} from '@nestjs/common';
+import { CreateChannelDto } from './create-channel.dto';
+import { ChannelsService } from './channels.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { MessagesGateway } from '../messages/messages.gateway';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { UsersCache } from '@prisma/client';
 @UseGuards(JwtAuthGuard)
 @Controller('channels')
-export class ChannelsController{
-    constructor(private readonly channelsService: ChannelsService){}
-    @Post()
-    create(@Body() dto: CreateChannelDto, @Req() req){
-        return this.channelsService.create(dto, req.user.id);
-    }
-    @Get()
-    findAll(@Req() req){
-        return this.channelsService.findUserChannels(req.user.id);
-    }
+export class ChannelsController {
+  constructor(private readonly channelsService: ChannelsService) {}
+  @Post()
+  create(@Body() dto: CreateChannelDto, @CurrentUser() user: UsersCache) {
+    return this.channelsService.create(dto, user.id);
+  }
+  @Get()
+  findAll(@CurrentUser() user: UsersCache) {
+    return this.channelsService.findUserChannels(user.id);
+  }
 
-    @Get(':id')
-    findOne(@Param('id') id:string, @Req() req){
-        return this.channelsService.findById(id, req.user.id);
-    }
+  @Get(':id')
+  findOne(@Param('id') id: string, @CurrentUser() user: UsersCache) {
+    return this.channelsService.findById(id, user.id);
+  }
 
-    @Put(':id/read-mark')
-    markRead(@Param('id') channelid: string, @Body() body:{messageId: string}, @Req() req){
-        return this.channelsService.markRead(channelid, req.user.id, body.messageId);
-    }
+  @Put(':id/read-mark')
+  markRead(
+    @Param('id') channelid: string,
+    @Body() body: { messageId: string },
+    @CurrentUser() user: UsersCache,
+  ) {
+    return this.channelsService.markRead(channelid, user.id, body.messageId);
+  }
+}
+@UseGuards(JwtAuthGuard)
+@Controller('presence')
+export class PresenceController {
+  constructor(private readonly messagesGateway: MessagesGateway) {}
+  @Get()
+  getOnlineUsers() {
+    return this.messagesGateway.getOnlineUserIds();
+  }
 }
