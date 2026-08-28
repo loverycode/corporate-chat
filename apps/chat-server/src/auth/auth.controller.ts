@@ -1,14 +1,14 @@
-import { Controller, Get, UseGuards, Req, Post, Body } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
-
-
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { UsersCache } from '@prisma/client';
 @Controller('auth')
-export class AuthController{
-    constructor(private readonly authService: AuthService){}
-    @UseGuards(JwtAuthGuard)
-    @Get('me')
-    async me(@Req() req){
-        return req.user;
-    }
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  me(@CurrentUser() user: UsersCache) {
+    return user;
+  }
 }
