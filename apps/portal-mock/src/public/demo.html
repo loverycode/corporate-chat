@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Демо портала — встроенный чат</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; margin: 0; display: flex; height: 100vh; }
+        #sidebar { width: 260px; padding: 16px; border-right: 1px solid #e5e7eb; }
+        #widget-container { flex: 1; display: flex; flex-direction: column; }
+        iframe { flex: 1; border: none; }
+        #controls { padding: 12px; border-bottom: 1px solid #e5e7eb; display: flex; gap: 8px; align-items: center; }
+        #log { font-size: 12px; color: #555; max-height: 150px; overflow: auto; padding: 8px; background: #fafafa; }
+        select, button { padding: 6px 10px; }
+        #unread-badge { background: #3b5a7a; color: white; border-radius: 10px; padding: 2px 8px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h3>Портал (заглушка)</h3>
+        <p>Пользователь: <span id="user-select"></span></p>
+        <select id="userSelect">
+            <option value="b4bf0b67-6b40-4035-8ee7-0a8f0984ac99">Тест Тестов</option>
+            <option value="21be610f-8ec5-4225-8880-a80d7029c2ea">Второй Пользователь</option>
+        </select>
+        <p>Непрочитано: <span id="unread-badge">0</span></p>
+    </div>
+    <div id="widget-container">
+        <div id="controls">
+            <button id="themeToggle">Сменить тему</button>
+            <button id="reloadToken">Обновить токен</button>
+        </div>
+        <iframe id="chatFrame" src="http://localhost:5174"></iframe>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        const CHAT_ORIGIN = 'http://localhost:5174';
+        const PORTAL_API = 'http://localhost:3001';
+        const frame = document.getElementById('chatFrame');
+        const logEl = document.getElementById('log');
+        const userSelect = document.getElementById('userSelect');
+        const unreadBadge = document.getElementById('unread-badge');
+        let currentTheme = 'light';
+
+        function log(msg) {
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.prepend(line);
+        }
+
+        async function sendToken() {
+            const userId = userSelect.value;
+            const res = await fetch(`${PORTAL_API}/auth/token/${userId}`);
+            const { token } = await res.json();
+            const users = { 'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Тест Тестов', '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Второй Пользователь' };
+            frame.contentWindow.postMessage(
+                { type: 'portal:auth', token},
+                CHAT_ORIGIN,
+            );
+            log(`Токен отправлен для ${users[userId]}`);
+        }
+
+        frame.addEventListener('load', sendToken);
+        userSelect.addEventListener('change', sendToken);
+
+        document.getElementById('themeToggle').addEventListener('click', () => {
+            currentTheme = currentTheme === 'light' ? 'dark' : 'light';
+            frame.contentWindow.postMessage({ type: 'portal:set-theme', theme: currentTheme }, CHAT_ORIGIN);
+            log(`Тема изменена на: ${currentTheme}`);
+        });
+
+        document.getElementById('reloadToken').addEventListener('click', sendToken);
+
+        window.addEventListener('message', (event) => {
+            if (event.origin !== CHAT_ORIGIN) return;
+            const { type, ...payload } = event.data || {};
+            if (type === 'chat:unread-count') {
+                unreadBadge.textContent = payload.total;
+                log(`chat:unread-count: ${payload.total}`);
+            } else if (type === 'chat:open-object') {
+                log(`chat:open-object: ${payload.objectId} (портал бы перешёл на /dashboard/object/${payload.objectId})`);
+            } else if (type === 'chat:token-expired') {
+                log('chat:token-expired — обновляем токен');
+                sendToken();
+            } else if (type==='chat:ready'){
+                widgetReady = true;
+                sendToken();
+                log('Получено chat:ready — отправляем токен');
+            }
+        });
+    </script>
+</body>
+</html>
