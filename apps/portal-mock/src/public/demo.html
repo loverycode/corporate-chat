@@ -27,20 +27,24 @@
     <div id="widget-container">
         <div id="controls">
             <button id="themeToggle">Сменить тему</button>
+            <button id="localeToggle">Сменить язык</button>
             <button id="reloadToken">Обновить токен</button>
         </div>
-        <iframe id="chatFrame" src="http://localhost:5174"></iframe>
+        <iframe id="chatFrame" src="http://localhost:5173"></iframe>
         <div id="log"></div>
     </div>
 
     <script>
-        const CHAT_ORIGIN = 'http://localhost:5174';
+        const CHAT_ORIGIN = 'http://localhost:5173';
         const PORTAL_API = 'http://localhost:3001';
         const frame = document.getElementById('chatFrame');
         const logEl = document.getElementById('log');
         const userSelect = document.getElementById('userSelect');
         const unreadBadge = document.getElementById('unread-badge');
         let currentTheme = 'light';
+        let currentLocale = 'ru';
+        let isWidgetReady = false;
+        let pendingToken = null;
 
         function log(msg) {
             const line = document.createElement('div');
@@ -52,21 +56,46 @@
             const userId = userSelect.value;
             const res = await fetch(`${PORTAL_API}/auth/token/${userId}`);
             const { token } = await res.json();
-            const users = { 'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Тест Тестов', '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Второй Пользователь' };
-            frame.contentWindow.postMessage(
-                { type: 'portal:auth', token},
-                CHAT_ORIGIN,
-            );
-            log(`Токен отправлен для ${users[userId]}`);
+            const users = {
+                'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Тест Тестов',
+                '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Второй Пользователь'
+            };
+            if (isWidgetReady) {
+                frame.contentWindow.postMessage({ type: 'portal:auth', token }, CHAT_ORIGIN);
+                log(`Токен отправлен для ${users[userId]}`);
+                sendThemeAndLocale();
+            } else {
+                pendingToken = token;
+                log('Ожидаем chat:ready...');
+            }
         }
 
-        frame.addEventListener('load', sendToken);
+        function sendThemeAndLocale() {
+            frame.contentWindow.postMessage({ type: 'portal:theme', mode: currentTheme }, CHAT_ORIGIN);
+            frame.contentWindow.postMessage({ type: 'portal:locale', locale: currentLocale }, CHAT_ORIGIN);
+            log(`Тема: ${currentTheme}, Язык: ${currentLocale}`);
+        }
+
         userSelect.addEventListener('change', sendToken);
 
         document.getElementById('themeToggle').addEventListener('click', () => {
             currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-            frame.contentWindow.postMessage({ type: 'portal:set-theme', theme: currentTheme }, CHAT_ORIGIN);
-            log(`Тема изменена на: ${currentTheme}`);
+            if (isWidgetReady) {
+                frame.contentWindow.postMessage({ type: 'portal:theme', mode: currentTheme }, CHAT_ORIGIN);
+                log(`Тема изменена на: ${currentTheme}`);
+            } else {
+                log('Виджет ещё не готов');
+            }
+        });
+
+        document.getElementById('localeToggle').addEventListener('click', () => {
+            currentLocale = currentLocale === 'ru' ? 'en' : 'ru';
+            if (isWidgetReady) {
+                frame.contentWindow.postMessage({ type: 'portal:locale', locale: currentLocale }, CHAT_ORIGIN);
+                log(`Язык изменён на: ${currentLocale}`);
+            } else {
+                log('Виджет ещё не готов');
+            }
         });
 
         document.getElementById('reloadToken').addEventListener('click', sendToken);
@@ -74,20 +103,30 @@
         window.addEventListener('message', (event) => {
             if (event.origin !== CHAT_ORIGIN) return;
             const { type, ...payload } = event.data || {};
-            if (type === 'chat:unread-count') {
+
+            if (type === 'chat:ready') {
+                isWidgetReady = true;
+                log('Получено chat:ready');
+                if (pendingToken) {
+                    const users = {
+                        'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Тест Тестов',
+                        '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Второй Пользователь'
+                    };
+                    frame.contentWindow.postMessage({ type: 'portal:auth', token: pendingToken }, CHAT_ORIGIN);
+                    log(`Токен отправлен для ${users[userSelect.value]}`);
+                    sendThemeAndLocale();
+                    pendingToken = null;
+                }
+            } else if (type === 'chat:unread-count') {
                 unreadBadge.textContent = payload.total;
                 log(`chat:unread-count: ${payload.total}`);
             } else if (type === 'chat:open-object') {
-                log(`chat:open-object: ${payload.objectId} (портал бы перешёл на /dashboard/object/${payload.objectId})`);
+                log(`chat:open-object: ${payload.objectId}`);
             } else if (type === 'chat:token-expired') {
                 log('chat:token-expired — обновляем токен');
                 sendToken();
-            } else if (type==='chat:ready'){
-                widgetReady = true;
-                sendToken();
-                log('Получено chat:ready — отправляем токен');
             }
         });
     </script>
-</body>
+    </body>
 </html>

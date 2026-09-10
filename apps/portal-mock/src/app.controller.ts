@@ -19,7 +19,7 @@ export class AppController {
         }
         const token = this.jwtService.sign(
             { sub: user.id, name: user.name, email: user.email, role: user.role },
-            { secret: process.env.JWT_SECRET, expiresIn: '4h' },
+            { secret: process.env.CHAT_JWT_SECRET, expiresIn: '4h' },
         );
         return { token };
     }
