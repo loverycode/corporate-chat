@@ -43,6 +43,7 @@ model Channels {
   id              String      @id @default(uuid()) @db.Uuid
   type            ChannelType
   title           String?
+  description     String?
   contextObjectId String?      @db.Uuid @map("context_object_id")
   createdBy       String       @db.Uuid  @map("created_by")
   createdAt       DateTime     @default(now()) @map("created_at")
@@ -51,7 +52,9 @@ model Channels {
   creator UsersCache @relation("ChannelCreator", fields: [createdBy], references: [id])
   members         ChannelMembers[] @relation("ChannelMembers")
   messages        Messages[]       @relation("ChannelMessages")
+  attachments     Attachments[]    @relation("ChannelAttachments")
 
+  @@unique([type, contextObjectId])
   @@map("channels")
 }
 
@@ -102,6 +105,7 @@ model Attachments {
   id         String @id @default(uuid()) @db.Uuid
   messageId  String? @db.Uuid @map("message_id")
   uploaderId String @db.Uuid @map("uploader_id")
+  channelId  String? @db.Uuid @map("channel_id")
   fileName   String @map("file_name")
   mime       String
   size       Int
@@ -111,6 +115,7 @@ model Attachments {
 
   message Messages? @relation("MessageFile", fields: [messageId], references: [id])
   uploader UsersCache @relation("FileUploader", fields: [uploaderId], references: [id])
+  channel  Channels?  @relation("ChannelAttachments", fields: [channelId], references: [id])
   @@map("attachments")
 }
 
