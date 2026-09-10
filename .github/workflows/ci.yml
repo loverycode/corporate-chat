@@ -40,6 +40,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
       - name: Lint
         run: npm run lint
 
@@ -55,13 +58,17 @@ jobs:
         run: npm run test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corporate_chat_test?schema=public
-          JWT_SECRET: test-secret-for-ci
+          CHAT_JWT_SECRET: test-secret-for-ci
 
       - name: E2E tests
         run: npm run test:e2e
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corporate_chat_test?schema=public
-          JWT_SECRET: test-secret-for-ci
+          CHAT_JWT_SECRET: test-secret-for-ci
+          MINIO_ENDPOINT: http://localhost:9000
+          MINIO_PUBLIC_URL: http://localhost:9000
+          MINIO_ROOT_USER: admin
+          MINIO_ROOT_PASSWORD: password
 
   chat-widget:
     runs-on: ubuntu-latest
