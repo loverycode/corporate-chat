@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Res,
-  Param,
-  UseGuards,
-  UseInterceptors,
-  UploadedFile,
-} from '@nestjs/common';
+import {Controller, Post, Get, Res, Param, UseGuards, UseInterceptors, UploadedFile} from '@nestjs/common';
 import { AttachmentsService } from './attachments.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -38,8 +29,14 @@ export class AttachmentDownloadController {
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Get(':id/download')
-  async download(@Param('id') id: string, @Res() res: Response) {
-    const url = await this.attachmentsService.getDownloadFile(id);
-    res.redirect(url);
+  async download(@Param('id') id: string, @Res() res: Response, @CurrentUser() user: UsersCache) {
+    const url = await this.attachmentsService.getDownloadFile(id, user.id);
+    return res.redirect(url);
+  }
+
+  @Get(':id/thumbnail')
+  async getThumbnail(@Param('id') id: string, @Res() res: Response, @CurrentUser() user: UsersCache) {
+    const url = await this.attachmentsService.getThumbnailUrl(id, user.id);
+    return res.redirect(url);
   }
 }

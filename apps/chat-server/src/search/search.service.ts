@@ -14,11 +14,7 @@ export interface SearchResult {
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(
-    userId: string,
-    query: string,
-    channelId?: string,
-  ): Promise<SearchResult[]> {
+  async search(userId: string, query: string, channelId?: string): Promise<SearchResult[]> {
     const memberships = await this.prisma.channelMembers.findMany({
       where: { userId, ...(channelId ? { channelId } : {}) },
       select: { channelId: true },
@@ -28,14 +24,13 @@ export class SearchService {
     if (allowedChannelIds.length === 0) {
       return [];
     }
-
     const results = await this.prisma.$queryRaw<SearchResult[]>`
             SELECT id, channel_id AS "channelId", author_id AS "authorId",
-                   body_md AS "bodyMd", created_at AS "createdAt", ts_headline('russian', body_md, plainto_tsquery('russian', ${query}), 'StartSel=<mark>, StopSel=</mark>') AS headline
+                   body_md AS "bodyMd", created_at AS "createdAt", ts_headline('russian_nostop', body_md, plainto_tsquery('russian_nostop', ${query}), 'StartSel=<mark>, StopSel=</mark>') AS headline
             FROM   messages
             WHERE  channel_id = ANY(${allowedChannelIds}::uuid[]) AND deleted_at IS NULL
-                   AND search_vector @@ plainto_tsquery('russian', ${query})
-            ORDER BY ts_rank(search_vector, plainto_tsquery('russian', ${query})) DESC
+                   AND search_vector @@ plainto_tsquery('russian_nostop', ${query})
+            ORDER BY ts_rank(search_vector, plainto_tsquery('russian_nostop', ${query})) DESC
             LIMIT 50
         `;
 

@@ -66,11 +66,9 @@ export class ObjectsService {
         toFetch.push(id);
       }
     }
-
     if (toFetch.length === 0) {
       return result;
     }
-
     try {
       const response = await firstValueFrom(
         this.http.post<ResolvedObject[]>(
@@ -82,7 +80,6 @@ export class ObjectsService {
           },
         ),
       );
-
       for (const obj of response.data) {
         result.set(obj.id, obj);
         this.cache.set(`${obj.id}:${forUserId}`, {
@@ -97,5 +94,15 @@ export class ObjectsService {
     }
 
     return result;
+  }
+
+  async checkAccess(objectId: string, userId: string): Promise<boolean> {
+    try {
+      const resolved = await this.resolveObjects([objectId], userId);
+      const obj = resolved.get(objectId);
+      return obj?.canRead ?? false;
+    } catch {
+      return false;
+    }
   }
 }
