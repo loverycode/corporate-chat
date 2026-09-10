@@ -9,6 +9,10 @@ export class CreateChannelDto {
   title?: string;
 
   @IsOptional()
+  @IsString()
+  description?: string;
+  
+  @IsOptional()
   @IsUUID()
   contextObjectId?: string;
 

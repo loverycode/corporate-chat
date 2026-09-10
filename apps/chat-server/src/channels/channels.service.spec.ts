@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from '../messages/messages.gateway';
+import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
+
 describe('ChannelsService', () => {
   let service: ChannelsService;
   let prisma: {
@@ -16,6 +18,7 @@ describe('ChannelsService', () => {
       findMany: jest.Mock;
       findUnique: jest.Mock;
       create: jest.Mock;
+      update: jest.Mock;
     };
     messages: {
       count: jest.Mock;
@@ -23,9 +26,15 @@ describe('ChannelsService', () => {
     };
     channelMembers: {
       findMany: jest.Mock;
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      createMany: jest.Mock;
+      update: jest.Mock;
+      delete: jest.Mock;
     };
   };
   let gateway: any;
+  let eventsPublisher: any;
 
   beforeEach(async () => {
     prisma = {
@@ -34,6 +43,7 @@ describe('ChannelsService', () => {
         findMany: jest.fn(),
         findUnique: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
       },
       messages: {
         count: jest.fn(),
@@ -41,8 +51,14 @@ describe('ChannelsService', () => {
       },
       channelMembers: {
         findMany: jest.fn(),
+        findUnique: jest.fn(),
+        create: jest.fn(),
+        createMany: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
       },
     };
+
     gateway = {
       emitMessageCreated: jest.fn(),
       emitUnreadChanged: jest.fn(),
@@ -51,15 +67,26 @@ describe('ChannelsService', () => {
       emitReactionChanged: jest.fn(),
     };
 
+    eventsPublisher = {
+      publishToUser: jest.fn(),
+      publishToChannel: jest.fn(),
+      publishToAll: jest.fn(),
+      joinRoom: jest.fn(),
+      leaveRoom: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ChannelsService,
         { provide: PrismaService, useValue: prisma },
         { provide: MessagesGateway, useValue: gateway },
+        { provide: EVENTS_PUBLISHER, useValue: eventsPublisher },
       ],
     }).compile();
+
     service = module.get<ChannelsService>(ChannelsService);
   });
+
   describe('validation', () => {
     it('direct: BadRequestException, если участников не 2', async () => {
       await expect(
@@ -78,6 +105,7 @@ describe('ChannelsService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
     it('group: BadRequestException, если участников нет', async () => {
       await expect(
         service.create(
@@ -90,6 +118,7 @@ describe('ChannelsService', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
     it('group: BadRequestException, если отсутствует contextObjectId', async () => {
       await expect(
         service.create(
@@ -109,6 +138,7 @@ describe('ChannelsService', () => {
         ),
       ).rejects.toThrow(ForbiddenException);
     });
+
     it('возвращает существующий канал, если он уже есть', async () => {
       const existingChannel = {
         id: 'channel-1',
@@ -131,14 +161,15 @@ describe('ChannelsService', () => {
 
     it('создаёт новый канал, если такой не существует', async () => {
       prisma.channels.findFirst.mockResolvedValue(null);
-      prisma.channels.create.mockResolvedValue({ id: 'new-channel' });
+      prisma.channels.create.mockResolvedValue({ id: 'new-channel', members: []});
 
       const result = await service.create(
         { type: ChannelType.direct, members: ['user-1', 'user-2'] },
         'user-1',
       );
-
-      expect(result).toEqual({ id: 'new-channel' });
+      console.log('result:', result); 
+      console.log('calls:', prisma.channels.create.mock.calls);
+      expect(result).toEqual({ id: 'new-channel', members: []});
       expect(prisma.channels.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -155,6 +186,7 @@ describe('ChannelsService', () => {
       );
     });
   });
+
   describe('createGroup (через create)', () => {
     it('создатель становится owner, остальные — member', async () => {
       prisma.channels.create.mockResolvedValue({ id: 'group-1' });
@@ -183,6 +215,7 @@ describe('ChannelsService', () => {
         }),
       );
     });
+
     it('не дублирует создателя, если он уже есть в members', async () => {
       prisma.channels.create.mockResolvedValue({ id: 'group-1' });
 
@@ -203,7 +236,7 @@ describe('ChannelsService', () => {
 
   describe('createContext (через create)', () => {
     it('возвращает существующий канал объекта, если он уже есть', async () => {
-      const existing = { id: 'ctx-1', contextObjectId: 'obj-1' };
+      const existing = { id: 'ctx-1', contextObjectId: 'obj-1', members: [] };
       prisma.channels.findFirst.mockResolvedValue(existing);
 
       const result = await service.create(
@@ -251,6 +284,7 @@ describe('ChannelsService', () => {
   describe('findById', () => {
     it('бросает NotFoundException, если канала нет', async () => {
       prisma.channels.findUnique.mockResolvedValue(null);
+
       await expect(service.findById('missing-id', 'user-1')).rejects.toThrow(
         NotFoundException,
       );
@@ -294,6 +328,7 @@ describe('ChannelsService', () => {
         members: [{ userId: 'user-1' }],
       };
       prisma.channels.findMany.mockResolvedValue([older, newer]);
+      prisma.messages.count.mockResolvedValue(0);
 
       const result = await service.findUserChannels('user-1');
 
@@ -315,6 +350,8 @@ describe('ChannelsService', () => {
         members: [{ userId: 'user-1' }],
       };
       prisma.channels.findMany.mockResolvedValue([empty, withMsg]);
+      prisma.messages.count.mockResolvedValue(0);
+
       const result = await service.findUserChannels('user-1');
       expect(result[0].id).toBe('channel-empty');
     });

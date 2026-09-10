@@ -1,5 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ChannelsService } from './channels.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { UsersCache } from '@prisma/client';
