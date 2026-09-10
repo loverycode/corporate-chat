@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ReactionsService } from './reactions.service';
-import { MessagesModule } from 'src/messages/messages.module';
-import { PrismaModule } from 'src/prisma/prisma.module';
+import { MessagesModule } from '../messages/messages.module';
+import { PrismaModule } from '../prisma/prisma.module';
 import { ReactionsController } from './reactions.controller';
 
 @Module({

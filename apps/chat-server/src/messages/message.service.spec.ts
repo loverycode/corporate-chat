@@ -4,12 +4,14 @@ import { MessagesService } from './message.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from './messages.gateway';
 import { ObjectsService } from '../objects/objects.service';
+import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
 
 describe('MessagesService', () => {
   let service: MessagesService;
   let prisma: any;
   let gateway: any;
   let objectsService: any;
+  let eventsPublisher: any;
 
   beforeEach(async () => {
     prisma = {
@@ -34,6 +36,11 @@ describe('MessagesService', () => {
       extractObjectIds: jest.fn().mockReturnValue([]),
       resolveObjects: jest.fn(),
     };
+    eventsPublisher = {
+      publishToUser: jest.fn(),
+      publishToChannel: jest.fn(),
+      publishToAll: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -41,6 +48,7 @@ describe('MessagesService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: MessagesGateway, useValue: gateway },
         { provide: ObjectsService, useValue: objectsService },
+        { provide: EVENTS_PUBLISHER, useValue: eventsPublisher },
       ],
     }).compile();
 
@@ -86,14 +94,14 @@ describe('MessagesService', () => {
         userId: 'user-1',
       });
       prisma.messages.findUnique
-        .mockResolvedValueOnce(null) // проверка дублей
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({
           id: 'new-msg',
           channelId: 'channel-1',
           refs: [],
           mentions: [],
           files: [],
-        }); // финальный перезапрос
+        });
       prisma.messages.create.mockResolvedValue({
         id: 'new-msg',
         channelId: 'channel-1',
@@ -118,11 +126,11 @@ describe('MessagesService', () => {
         userId: 'user-1',
       });
       prisma.messages.findUnique
-        .mockResolvedValueOnce(null) // проверка дублей
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({
           id: 'reply-target',
           channelId: 'other-channel',
-        }); // проверка replyTo
+        });
 
       await expect(
         service.create(

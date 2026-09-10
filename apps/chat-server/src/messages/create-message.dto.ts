@@ -3,13 +3,11 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  MaxLength,
-  MinLength,
+  MaxLength
 } from 'class-validator';
 
 export class CreateMessageDto {
   @IsString()
-  @MinLength(1)
   @MaxLength(10000)
   bodyMd: string;
 

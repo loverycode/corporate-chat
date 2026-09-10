@@ -13,6 +13,7 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { InMemoryEventsPublisher } from '../events/in-memory-events-publisher';
 import { getAllowedOrigins } from '../config/allowed-origins';
+import { EventsPublisher } from '../events/events-publisher.interface';
 
 interface AuthenticatedSocket extends Socket {
   data: { userId: string };
@@ -27,7 +28,7 @@ interface JwtPayload {
 @Injectable()
 @WebSocketGateway({ cors: { origin: getAllowedOrigins() } })
 export class MessagesGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, EventsPublisher
 {
   @WebSocketServer()
   server: Server;
@@ -49,7 +50,7 @@ export class MessagesGateway
     }
     try {
       const payload = this.jwtService.verify<JwtPayload>(token, {
-        secret: process.env.JWT_SECRET,
+        secret: process.env.CHAT_JWT_SECRET,
       });
       client.data.userId = payload.sub;
       await client.join(`user:${payload.sub}`);
@@ -127,46 +128,39 @@ export class MessagesGateway
       .emit('typing', { channelId: data.channelId, userId });
   }
   emitMessageCreated(channelId: string, message: unknown) {
-    this.eventsPublisher.publishToChannel(
-      channelId,
-      'message.created',
-      message,
-    );
+    this.eventsPublisher.publishToChannel(channelId, 'message.created', message);
   }
-  emitUnreadChanged(
-    userId: string,
-    total: number,
-    channelId: string,
-    count: number,
-  ) {
-    this.eventsPublisher.publishToUser(userId, 'message.changed', {
-      channelId,
-      total,
-      count,
-    });
+  emitUnreadChanged(userId: string, total: number, channelId: string, count: number,) {
+    this.eventsPublisher.publishToUser(userId, 'unread.changed', {channelId, total, count});
   }
   emitMessageUpdated(channelId: string, message: unknown) {
-    this.eventsPublisher.publishToChannel(
-      channelId,
-      'message.updated',
-      message,
-    );
+    this.eventsPublisher.publishToChannel(channelId, 'message.updated', message);
   }
   emitMessageDeleted(channelId: string, messageId: string) {
-    this.eventsPublisher.publishToChannel(
-      channelId,
-      'message.deleted',
-      messageId,
-    );
+    this.eventsPublisher.publishToChannel(channelId, 'message.deleted', messageId);
   }
-  emitReactionChanged(
-    channelId: string,
-    messageId: string,
-    reactions: { userId: string; emoji: string }[],
-  ) {
-    this.eventsPublisher.publishToChannel(channelId, 'reaction.changed', {
-      messageId,
-      reactions,
-    });
+  emitReactionChanged(channelId: string, messageId: string, reactions: { userId: string; emoji: string }[]) {
+    this.eventsPublisher.publishToChannel(channelId, 'reaction.changed', {messageId, reactions});
+  }
+  emitToUser(userId: string, event: string, data: any){
+    this.server.to(`user:${userId}`).emit(event, data);
+  }
+   publishToChannel(channelId: string, event: string, payload: unknown): void {
+    this.eventsPublisher.publishToChannel(channelId, event, payload);
+  }
+
+  publishToUser(userId: string, event: string, payload: unknown): void {
+    this.server.to(`user:${userId}`).emit(event, payload);
+  }
+
+  publishToAll(event: string, payload: unknown): void {
+    this.server.emit(event, payload);
+  }
+  joinRoom(userId: string, channelId: string): void {
+    this.server.in(`user:${userId}`).socketsJoin(channelId);
+  }
+
+  leaveRoom(userId: string, channelId: string): void {
+    this.server.in(`user:${userId}`).socketsLeave(channelId);
   }
 }

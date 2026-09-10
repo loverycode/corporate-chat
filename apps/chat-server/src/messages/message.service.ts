@@ -1,10 +1,6 @@
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateMessageDto } from './create-message.dto';
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import {PrismaService} from '../prisma/prisma.service';
+import {CreateMessageDto} from './create-message.dto';
+import {ForbiddenException, Injectable, NotFoundException, BadRequestException} from '@nestjs/common';
 import { MessagesGateway } from './messages.gateway';
 import { ObjectsService } from '../objects/objects.service';
 import { UpdateMessageDto } from './update-message.dto';
@@ -37,6 +33,13 @@ export class MessagesService {
 
   async create(channelId: string, dto: CreateMessageDto, authorId: string) {
     await this.assertMember(channelId, authorId);
+    const bodyMd = dto.bodyMd?.trim() ?? '';
+    if (!bodyMd && (!dto.attachmentIds || dto.attachmentIds.length === 0)) {
+      throw new BadRequestException('Message must contain text or at least one attachment');
+    }
+    if (dto.attachmentIds && dto.attachmentIds.length > 10) {
+        throw new BadRequestException('Maximum 10 attachments per message');
+    }
     const existing = await this.prisma.messages.findUnique({
       where: {
         channelId_clientMessageId: {
@@ -60,12 +63,12 @@ export class MessagesService {
       data: {
         channelId,
         authorId,
-        bodyMd: dto.bodyMd,
+        bodyMd,
         replyToId: dto.replyToId,
         clientMessageId: dto.clientMessageId,
       },
     });
-    const objectIds = this.objectsService.extractObjectIds(dto.bodyMd);
+    const objectIds = this.objectsService.extractObjectIds(bodyMd);
     if (objectIds.length > 0) {
       const resolved = await this.objectsService.resolveObjects(
         objectIds,
@@ -110,6 +113,18 @@ export class MessagesService {
       }
     }
     if (dto.attachmentIds && dto.attachmentIds.length > 0) {
+      const attachments = await this.prisma.attachments.findMany({
+        where: {
+          id: { in: dto.attachmentIds },
+          uploaderId: authorId,
+          messageId: null,
+          channelId: channelId,
+        },
+      });
+
+      if (attachments.length !== dto.attachmentIds.length) {
+        throw new BadRequestException('Some attachments are invalid or from other channels');
+      }
       await this.prisma.attachments.updateMany({
         where: {
           id: { in: dto.attachmentIds },
@@ -134,7 +149,59 @@ export class MessagesService {
     });
 
     this.gateway.emitMessageCreated(channelId, messageWithRelations);
+    await this.notifyUnreadChanged(channelId, authorId);
     return messageWithRelations;
+  }
+
+  private async notifyUnreadChanged(channelId: string, authorId: string) {
+    const otherMembers = await this.prisma.channelMembers.findMany({
+      where: { channelId, userId: { not: authorId } },
+      select: { userId: true },
+    });
+    if (otherMembers && otherMembers.length > 0) {
+      await Promise.all(
+        otherMembers.map(async ({ userId }) => {
+          const memberships = await this.prisma.channelMembers.findMany({
+            where: { userId },
+            select: { channelId: true, lastReadMessageId: true },
+          });
+
+          let total = 0;
+          let countForChannel = 0;
+          for (const membership of memberships) {
+            const count = await this.prisma.messages.count({
+              where: {
+                channelId: membership.channelId,
+                deletedAt: null,
+                ...(membership.lastReadMessageId
+                  ? {
+                      createdAt: {
+                        gt: await this.getMessageCreatedAt(
+                          membership.lastReadMessageId,
+                        ),
+                      },
+                    }
+                  : {}),
+              },
+            });
+            total += count;
+            if (membership.channelId === channelId) {
+              countForChannel = count;
+            }
+          }
+
+          this.gateway.emitUnreadChanged(userId, total, channelId, countForChannel);
+        }),
+      );
+    }
+  }
+
+  private async getMessageCreatedAt(messageId: string): Promise<Date> {
+    const message = await this.prisma.messages.findUnique({
+      where: { id: messageId },
+      select: { createdAt: true },
+    });
+    return message?.createdAt ?? new Date(0);
   }
 
   async update(messageId: string, dto: UpdateMessageDto, userId: string) {
@@ -174,12 +241,7 @@ export class MessagesService {
     return { ok: true };
   }
 
-  async findHistory(
-    channelId: string,
-    userId: string,
-    cursor?: string,
-    limit = 30,
-  ) {
+  async findHistory(channelId: string, userId: string, cursor?: string, limit = 30) {
     await this.assertMember(channelId, userId);
     const messages = await this.prisma.messages.findMany({
       where: { channelId },
@@ -196,7 +258,38 @@ export class MessagesService {
       },
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     });
-    return messages.map((m) => this.maskDeleted(m));
+    const messagesWithAccess = await Promise.all(
+      messages.map(async (message) => {
+        if (message.refs && message.refs.length > 0) {
+          const refsWithAccess = await Promise.all(
+            message.refs.map(async (ref) => {
+              try {
+                const hasAccess = await this.objectsService.checkAccess(ref.objectId, userId);
+                if (!hasAccess) {
+                  return {
+                    ...ref,
+                    snapshotTitle: null,
+                    snapshotTypeName: null,
+                    canRead: false,
+                  };
+                }
+                return { ...ref, canRead: true };
+              } catch {
+                return {
+                  ...ref,
+                  snapshotTitle: null,
+                  snapshotTypeName: null,
+                  canRead: false,
+                };
+              }
+            }),
+          );
+          return { ...message, refs: refsWithAccess };
+        }
+        return message;
+      }),
+    );
+    return messagesWithAccess.map((m) => this.maskDeleted(m));
   }
 
   private maskDeleted<

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-} from '@nestjs/common';
+import {Injectable, NotFoundException, ForbiddenException} from '@nestjs/common';
 import { MessagesGateway } from '../messages/messages.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -50,7 +46,10 @@ export class ReactionsService {
     if (!message) {
       throw new NotFoundException('message not found');
     }
-
+    await this.assertMember(message.channelId, userId);
+    if (message.deletedAt) {
+      throw new NotFoundException('message not found');
+    }
     await this.prisma.reactions.deleteMany({
       where: { messageId, userId, emoji },
     });
