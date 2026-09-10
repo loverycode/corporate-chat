@@ -36,7 +36,7 @@ describe('Attachments (e2e)', () => {
         email: 'e2e@test.com',
         role: 'USER',
       },
-      { secret: process.env.JWT_SECRET },
+      { secret: process.env.CHAT_JWT_SECRET },
     );
 
     const res = await request(app.getHttpServer())
@@ -47,7 +47,7 @@ describe('Attachments (e2e)', () => {
   });
 
   afterAll(async () => {
-    await prisma.attachments.deleteMany({ where: { id: attachmentId } });
+    await prisma.attachments.deleteMany({ where: { uploaderId: userId } });
     await prisma.messages.deleteMany({ where: { channelId } });
     await prisma.channelMembers.deleteMany({ where: { channelId } });
     await prisma.channels.deleteMany({ where: { id: channelId } });
@@ -106,7 +106,7 @@ describe('Attachments (e2e)', () => {
   });
 
   it('отклоняет слишком большой файл - 400', async () => {
-    const largeBuffer = Buffer.alloc(20 * 1024 * 1024 + 1);
+    const largeBuffer = Buffer.alloc(50 * 1024 * 1024 + 1);
 
     await request(app.getHttpServer())
       .post(`/channels/${channelId}/attachments`)
@@ -123,11 +123,11 @@ describe('Attachments (e2e)', () => {
     expect(res.headers.location).toBeDefined();
   });
 
-  it('возвращает ошибку для несуществующего вложения - 400', async () => {
+  it('возвращает ошибку для несуществующего вложения - 404', async () => {
     await request(app.getHttpServer())
       .get(`/attachments/${randomUUID()}/download`)
       .set('Authorization', `Bearer ${token}`)
-      .expect(400);
+      .expect(404);
   });
 
   it('возвращает ошибку без авторизации при скачивании - 401', async () => {

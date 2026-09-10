@@ -36,11 +36,11 @@ describe('Messages (e2e)', () => {
         email: 'e2e@test.com',
         role: 'USER',
       },
-      { secret: process.env.JWT_SECRET },
+      { secret: process.env.CHAT_JWT_SECRET },
     );
     const res = await request(app.getHttpServer())
       .post('/channels')
-      .set('Authorisation', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${token}`)
       .send({ type: 'group', title: 'E2E Test Channel', members: [userId] });
     channelId = res.body.id;
   });
@@ -85,7 +85,7 @@ describe('Messages (e2e)', () => {
         email: 'stranger@test.com',
         role: 'USER',
       },
-      { secret: process.env.JWT_SECRET },
+      { secret: process.env.CHAT_JWT_SECRET },
     );
     return request(app.getHttpServer())
       .get(`/channels/${channelId}/messages`)

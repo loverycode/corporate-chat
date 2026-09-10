@@ -48,7 +48,7 @@ describe('Channels (e2e)', () => {
         email: `e2e-${userId}@test.com`,
         role: 'USER',
       },
-      { secret: process.env.JWT_SECRET },
+      { secret: process.env.CHAT_JWT_SECRET },
     );
   });
 
@@ -168,7 +168,7 @@ describe('Channels (e2e)', () => {
         email: `e2e-${thirdUserId}@test.com`,
         role: 'USER',
       },
-      { secret: process.env.JWT_SECRET },
+      { secret: process.env.CHAT_JWT_SECRET },
     );
 
     await request(app.getHttpServer())
