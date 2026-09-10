@@ -11,6 +11,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio
@@ -34,18 +39,20 @@ services:
     ports:
       - "3001:3000"
     env_file:
-      - .env
+      - ./apps/portal-mock/.env
 
   chat-server:
     build: ./apps/chat-server
     container_name: "corporate-chat"
     restart: unless-stopped
     working_dir: /app
-    command: npm run start:dev
+    command: sh -c "npx prisma migrate deploy && npm run start:dev"
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - ./apps/chat-server/.env
+    environment:
+      - ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3001
     depends_on:
       - postgres
       - minio
