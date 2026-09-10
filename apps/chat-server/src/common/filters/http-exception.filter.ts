@@ -1,4 +1,10 @@
-import {ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus} from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { Response } from 'express';
 
 @Catch()
@@ -6,7 +12,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
@@ -18,10 +23,13 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
       if (typeof exceptionResponse === 'string') {
         message = exceptionResponse;
-        code = this.getErrorCode(status, exceptionResponse);
-      } else if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
+        code = this.getErrorCode(status);
+      } else if (
+        typeof exceptionResponse === 'object' &&
+        exceptionResponse !== null
+      ) {
         message = (exceptionResponse as any).message || message;
-        code = (exceptionResponse as any).code || this.getErrorCode(status, message);
+        code = (exceptionResponse as any).code || this.getErrorCode(status);
       }
     } else if (exception instanceof Error) {
       message = exception.message;
@@ -34,7 +42,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     });
   }
 
-  private getErrorCode(status: number, message: string): string {
+  private getErrorCode(status: number): string {
     switch (status) {
       case HttpStatus.BAD_REQUEST:
         return 'BAD_REQUEST';

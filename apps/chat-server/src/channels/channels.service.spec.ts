@@ -161,15 +161,18 @@ describe('ChannelsService', () => {
 
     it('создаёт новый канал, если такой не существует', async () => {
       prisma.channels.findFirst.mockResolvedValue(null);
-      prisma.channels.create.mockResolvedValue({ id: 'new-channel', members: []});
+      prisma.channels.create.mockResolvedValue({
+        id: 'new-channel',
+        members: [],
+      });
 
       const result = await service.create(
         { type: ChannelType.direct, members: ['user-1', 'user-2'] },
         'user-1',
       );
-      console.log('result:', result); 
+      console.log('result:', result);
       console.log('calls:', prisma.channels.create.mock.calls);
-      expect(result).toEqual({ id: 'new-channel', members: []});
+      expect(result).toEqual({ id: 'new-channel', members: [] });
       expect(prisma.channels.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

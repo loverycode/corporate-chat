@@ -55,7 +55,11 @@ export class StorageService implements OnModuleInit {
   }
 
   async getDownloadUrl(key: string, expiresInSeconds = 300): Promise<string> {
-    const command = new GetObjectCommand({ Bucket: BUCKET, Key: key, ResponseContentDisposition: `attachment; filename="${encodeURIComponent(key.split('/').pop() || 'file')}"` });
+    const command = new GetObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename="${encodeURIComponent(key.split('/').pop() || 'file')}"`,
+    });
     return getSignedUrl(this.publicClient, command, {
       expiresIn: expiresInSeconds,
     });

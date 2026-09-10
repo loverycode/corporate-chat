@@ -1,4 +1,8 @@
-import {Injectable, NotFoundException, ForbiddenException} from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { MessagesGateway } from '../messages/messages.gateway';
 import { PrismaService } from '../prisma/prisma.service';
 

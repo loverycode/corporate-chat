@@ -14,7 +14,11 @@ export interface SearchResult {
 export class SearchService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async search(userId: string, query: string, channelId?: string): Promise<SearchResult[]> {
+  async search(
+    userId: string,
+    query: string,
+    channelId?: string,
+  ): Promise<SearchResult[]> {
     const memberships = await this.prisma.channelMembers.findMany({
       where: { userId, ...(channelId ? { channelId } : {}) },
       select: { channelId: true },

@@ -1,10 +1,16 @@
-import { Injectable, BadRequestException, ForbiddenException, NotFoundException} from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { fileTypeFromBuffer } from 'file-type';
-const MAX_SIZE_BYTES = parseInt(process.env.MAX_FILE_SIZE_MB || '50') * 1024 * 1024;
+const MAX_SIZE_BYTES =
+  parseInt(process.env.MAX_FILE_SIZE_MB || '50') * 1024 * 1024;
 const DANGEROUS_MIME_TYPES = [
   'application/x-msdownload',
   'application/x-executable',
@@ -12,11 +18,28 @@ const DANGEROUS_MIME_TYPES = [
   'application/x-bat',
   'application/x-msdos-program',
   'application/vnd.microsoft.portable-executable',
-  'application/java-archive', 'text/html', 'image/svg+xml', 'text/javascript', 'application/javascript' 
+  'application/java-archive',
+  'text/html',
+  'image/svg+xml',
+  'text/javascript',
+  'application/javascript',
 ];
 const DANGEROUS_EXTENSIONS = [
-  '.exe', '.bat', '.cmd', '.sh', '.com', '.msi', '.scr', '.jar', '.app',
-  '.js', '.vbs', '.ps1', '.html', '.htm', '.svg'
+  '.exe',
+  '.bat',
+  '.cmd',
+  '.sh',
+  '.com',
+  '.msi',
+  '.scr',
+  '.jar',
+  '.app',
+  '.js',
+  '.vbs',
+  '.ps1',
+  '.html',
+  '.htm',
+  '.svg',
 ];
 function sanitizeFileName(fileName: string): string {
   return fileName
@@ -31,10 +54,10 @@ export class AttachmentsService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
   ) {}
-   private async assertChannelMember(userId: string, channelId: string) {
+  private async assertChannelMember(userId: string, channelId: string) {
     const membership = await this.prisma.channelMembers.findUnique({
       where: {
-        channelId_userId: {channelId, userId},
+        channelId_userId: { channelId, userId },
       },
     });
     if (!membership) {
@@ -42,7 +65,11 @@ export class AttachmentsService {
     }
   }
 
-  async uploadFile(file: Express.Multer.File, uploaderId: string, channelId: string) {
+  async uploadFile(
+    file: Express.Multer.File,
+    uploaderId: string,
+    channelId: string,
+  ) {
     await this.assertChannelMember(uploaderId, channelId);
 
     if (file.size > MAX_SIZE_BYTES) {
@@ -59,7 +86,9 @@ export class AttachmentsService {
       throw new BadRequestException('file type not allowed');
     }
 
-    const decodedName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    const decodedName = Buffer.from(file.originalname, 'latin1').toString(
+      'utf8',
+    );
     const fileName = sanitizeFileName(decodedName) || `file-${randomUUID()}`;
     const fileId = randomUUID();
     const storageKey = `channels/${channelId}/${fileId}-${fileName}`;
@@ -90,27 +119,27 @@ export class AttachmentsService {
   async getDownloadFile(attachmentsId: string, userId: string) {
     const attachment = await this.prisma.attachments.findUnique({
       where: { id: attachmentsId },
-      include: {message: {select:{ channelId: true}}}
+      include: { message: { select: { channelId: true } } },
     });
     if (!attachment) {
       throw new NotFoundException('attachment not found');
     }
     if (attachment.message && attachment.message.channelId) {
       await this.assertChannelMember(userId, attachment.message.channelId);
-    } 
-    else {
+    } else {
       if (attachment.uploaderId !== userId) {
-        throw new ForbiddenException('Attachment not yet attached to a message');
+        throw new ForbiddenException(
+          'Attachment not yet attached to a message',
+        );
       }
     }
     return this.storage.getDownloadUrl(attachment.storageKey);
   }
 
-
   async getThumbnailUrl(attachmentsId: string, userId: string) {
     const attachment = await this.prisma.attachments.findUnique({
       where: { id: attachmentsId },
-      include: {message: {select: {channelId: true}}},
+      include: { message: { select: { channelId: true } } },
     });
     if (!attachment) {
       throw new NotFoundException('attachment not found');
@@ -120,14 +149,13 @@ export class AttachmentsService {
     }
     if (attachment.message && attachment.message.channelId) {
       await this.assertChannelMember(userId, attachment.message.channelId);
-    } 
-    else {
+    } else {
       if (attachment.uploaderId !== userId) {
-        throw new ForbiddenException('Attachment not yet attached to a message');
+        throw new ForbiddenException(
+          'Attachment not yet attached to a message',
+        );
       }
     }
     return this.storage.getDownloadUrl(attachment.thumbKey);
   }
-
-  
 }

@@ -1,4 +1,14 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Put, Delete, Patch} from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  UseGuards,
+  Put,
+  Delete,
+  Patch,
+} from '@nestjs/common';
 import { CreateChannelDto } from './create-channel.dto';
 import { ChannelsService } from './channels.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -25,8 +35,11 @@ export class ChannelsController {
     return this.channelsService.findById(id, user.id);
   }
   @Delete(':channelId')
-  async deleteChannel(@Param('channelId') channelId: string, @CurrentUser() user: UsersCache) {
-      return this.channelsService.deleteChannel(channelId, user.id);
+  async deleteChannel(
+    @Param('channelId') channelId: string,
+    @CurrentUser() user: UsersCache,
+  ) {
+    return this.channelsService.deleteChannel(channelId, user.id);
   }
 
   @Put(':id/read-mark')
@@ -38,18 +51,30 @@ export class ChannelsController {
     return this.channelsService.markRead(channelid, user.id, body.messageId);
   }
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateChannelDto, @CurrentUser() user: UsersCache) {
-      return this.channelsService.update(id, dto, user.id);
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateChannelDto,
+    @CurrentUser() user: UsersCache,
+  ) {
+    return this.channelsService.update(id, dto, user.id);
   }
 
   @Post(':id/members')
-  addMembers(@Param('id') id: string, @Body() body: { userIds: string[] }, @CurrentUser() user: UsersCache) {
-      return this.channelsService.addMembers(id, body.userIds, user.id);
+  addMembers(
+    @Param('id') id: string,
+    @Body() body: { userIds: string[] },
+    @CurrentUser() user: UsersCache,
+  ) {
+    return this.channelsService.addMembers(id, body.userIds, user.id);
   }
 
   @Delete(':id/members/:userId')
-  removeMember(@Param('id') id: string, @Param('userId') userId: string, @CurrentUser() user: UsersCache) {
-      return this.channelsService.removeMember(id, userId, user.id);
+  removeMember(
+    @Param('id') id: string,
+    @Param('userId') userId: string,
+    @CurrentUser() user: UsersCache,
+  ) {
+    return this.channelsService.removeMember(id, userId, user.id);
   }
 }
 

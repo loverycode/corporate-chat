@@ -7,14 +7,18 @@ import { JwtModule } from '@nestjs/jwt';
 import { ObjectsModule } from '../objects/objects.module';
 import { MessageActionsController } from './messages-actions.controller';
 import { EventsModule } from '../events/events.module';
-import { EVENTS_PUBLISHER } from '../events/events-publisher.interface'; 
+import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
 @Module({
   imports: [PrismaModule, JwtModule.register({}), ObjectsModule, EventsModule],
   controllers: [MessagesController, MessageActionsController],
-  providers: [MessagesService, MessagesGateway, {
+  providers: [
+    MessagesService,
+    MessagesGateway,
+    {
       provide: EVENTS_PUBLISHER,
-      useExisting: MessagesGateway, 
-    },],
+      useExisting: MessagesGateway,
+    },
+  ],
   exports: [MessagesService, MessagesGateway, EVENTS_PUBLISHER],
 })
 export class MessagesModule {}

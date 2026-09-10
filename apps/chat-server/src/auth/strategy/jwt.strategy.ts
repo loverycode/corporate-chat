@@ -9,7 +9,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       secretOrKey: process.env.CHAT_JWT_SECRET!,
-      algorithms: ['HS256'], 
+      algorithms: ['HS256'],
     });
   }
   async validate(payload: {

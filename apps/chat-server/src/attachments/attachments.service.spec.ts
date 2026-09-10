@@ -1,13 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { AttachmentsService } from './attachments.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-
+import { fileTypeFromBuffer } from 'file-type';
 jest.mock('file-type', () => ({
   fileTypeFromBuffer: jest.fn().mockResolvedValue({ mime: 'image/png' }),
 }));
-
+const fileTypeMock = fileTypeFromBuffer as jest.Mock;
 jest.mock('sharp', () => ({
   __esModule: true,
   default: jest.fn(() => ({
@@ -88,7 +92,9 @@ describe('AttachmentsService', () => {
       const sharpMock = sharpModule.default as jest.Mock;
       expect(sharpMock).toHaveBeenCalledWith(file.buffer);
       const sharpInstance = sharpMock.mock.results[0].value;
-      expect(sharpInstance.resize).toHaveBeenCalledWith(200, 200, { fit: 'inside' });
+      expect(sharpInstance.resize).toHaveBeenCalledWith(200, 200, {
+        fit: 'inside',
+      });
       expect(sharpInstance.toBuffer).toHaveBeenCalled();
       expect(storage.uploadFile).toHaveBeenCalledWith(
         expect.stringContaining('thumb.jpg'),
@@ -107,7 +113,10 @@ describe('AttachmentsService', () => {
     });
 
     it('не генерирует миниатюру для не-изображений', async () => {
-      const file = mockFile({ originalname: 'document.pdf', mimetype: 'application/pdf' });
+      const file = mockFile({
+        originalname: 'document.pdf',
+        mimetype: 'application/pdf',
+      });
       await service.uploadFile(file, 'user-1', 'channel-1');
       const sharpModule = jest.requireMock('sharp');
       const sharpMock = sharpModule.default as jest.Mock;
@@ -130,14 +139,22 @@ describe('AttachmentsService', () => {
 
     it('выбрасывает ошибку при файле больше 50 MB', async () => {
       const file = mockFile({ size: 50 * 1024 * 1024 + 1 });
-      await expect(service.uploadFile(file, 'user-1', 'channel-1')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.uploadFile(file, 'user-1', 'channel-1'),
+      ).rejects.toThrow(BadRequestException);
       expect(storage.uploadFile).not.toHaveBeenCalled();
       expect(prisma.attachments.create).not.toHaveBeenCalled();
     });
 
     it('разрешает файл размером ровно 50 MB', async () => {
-      const file = mockFile({ originalname: 'large.pdf', mimetype: 'application/pdf', size: 50 * 1024 * 1024 });
-      await expect(service.uploadFile(file, 'user-1', 'channel-1')).resolves.toEqual({ id: 'att-1' });
+      const file = mockFile({
+        originalname: 'large.pdf',
+        mimetype: 'application/pdf',
+        size: 50 * 1024 * 1024,
+      });
+      await expect(
+        service.uploadFile(file, 'user-1', 'channel-1'),
+      ).resolves.toEqual({ id: 'att-1' });
       expect(storage.uploadFile).toHaveBeenCalledWith(
         expect.stringContaining('large.pdf'),
         file.buffer,
@@ -147,30 +164,44 @@ describe('AttachmentsService', () => {
 
     it('выбрасывает ошибку при опасном расширении', async () => {
       const file = mockFile({ originalname: 'virus.exe' });
-      await expect(service.uploadFile(file, 'user-1', 'channel-1')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.uploadFile(file, 'user-1', 'channel-1'),
+      ).rejects.toThrow(BadRequestException);
       expect(storage.uploadFile).not.toHaveBeenCalled();
       expect(prisma.attachments.create).not.toHaveBeenCalled();
     });
 
     it('выбрасывает ошибку при опасном расширении без учёта регистра', async () => {
       const file = mockFile({ originalname: 'VIRUS.EXE' });
-      await expect(service.uploadFile(file, 'user-1', 'channel-1')).rejects.toThrow(BadRequestException);
+      await expect(
+        service.uploadFile(file, 'user-1', 'channel-1'),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('выбрасывает ошибку при опасном MIME-типе', async () => {
-      const { fileTypeFromBuffer } = require('file-type');
-      fileTypeFromBuffer.mockResolvedValueOnce({ mime: 'application/x-msdownload' });
-      const file = mockFile({ originalname: 'payload.bin', mimetype: 'application/octet-stream' });
-      await expect(service.uploadFile(file, 'user-1', 'channel-1')).rejects.toThrow(BadRequestException);
+      fileTypeMock.mockResolvedValueOnce({
+        mime: 'application/x-msdownload',
+      });
+      const file = mockFile({
+        originalname: 'payload.bin',
+        mimetype: 'application/octet-stream',
+      });
+      await expect(
+        service.uploadFile(file, 'user-1', 'channel-1'),
+      ).rejects.toThrow(BadRequestException);
       expect(storage.uploadFile).not.toHaveBeenCalled();
       expect(prisma.attachments.create).not.toHaveBeenCalled();
     });
 
     it('использует file.mimetype, если file-type ничего не определил', async () => {
-      const { fileTypeFromBuffer } = require('file-type');
-      fileTypeFromBuffer.mockResolvedValueOnce(undefined);
-      const file = mockFile({ originalname: 'document.pdf', mimetype: 'application/pdf' });
-      await expect(service.uploadFile(file, 'user-1', 'channel-1')).resolves.toEqual({ id: 'att-1' });
+      fileTypeMock.mockResolvedValueOnce(undefined);
+      const file = mockFile({
+        originalname: 'document.pdf',
+        mimetype: 'application/pdf',
+      });
+      await expect(
+        service.uploadFile(file, 'user-1', 'channel-1'),
+      ).resolves.toEqual({ id: 'att-1' });
       expect(storage.uploadFile).toHaveBeenCalledWith(
         expect.stringContaining('document.pdf'),
         file.buffer,
@@ -196,7 +227,12 @@ describe('AttachmentsService', () => {
 
   describe('getDownloadFile', () => {
     it('возвращает URL для скачивания для вложения, привязанного к сообщению', async () => {
-      const mockAttachment = { id: 'att-1', storageKey: 'key', uploaderId: 'user-1', message: { channelId: 'channel-1' } };
+      const mockAttachment = {
+        id: 'att-1',
+        storageKey: 'key',
+        uploaderId: 'user-1',
+        message: { channelId: 'channel-1' },
+      };
       const mockMembership = { channelId: 'channel-1', userId: 'user-1' };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
       prisma.channelMembers.findUnique.mockResolvedValueOnce(mockMembership);
@@ -211,7 +247,12 @@ describe('AttachmentsService', () => {
     });
 
     it('возвращает URL для скачивания для непривязанного вложения (загрузивший пользователь)', async () => {
-      const mockAttachment = { id: 'att-1', storageKey: 'key', uploaderId: 'user-1', message: null };
+      const mockAttachment = {
+        id: 'att-1',
+        storageKey: 'key',
+        uploaderId: 'user-1',
+        message: null,
+      };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
       storage.getDownloadUrl.mockResolvedValueOnce('http://example.com/file');
       const url = await service.getDownloadFile('att-1', 'user-1');
@@ -221,30 +262,51 @@ describe('AttachmentsService', () => {
     });
 
     it('выбрасывает ошибку Forbidden для непривязанного вложения не от загрузившего', async () => {
-      const mockAttachment = { id: 'att-1', storageKey: 'key', uploaderId: 'user-1', message: null };
+      const mockAttachment = {
+        id: 'att-1',
+        storageKey: 'key',
+        uploaderId: 'user-1',
+        message: null,
+      };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
-      await expect(service.getDownloadFile('att-1', 'user-2')).rejects.toThrow(ForbiddenException);
+      await expect(service.getDownloadFile('att-1', 'user-2')).rejects.toThrow(
+        ForbiddenException,
+      );
       expect(storage.getDownloadUrl).not.toHaveBeenCalled();
     });
 
     it('выбрасывает ошибку Forbidden, если пользователь не участник канала', async () => {
-      const mockAttachment = { id: 'att-1', storageKey: 'key', uploaderId: 'user-1', message: { channelId: 'channel-1' } };
+      const mockAttachment = {
+        id: 'att-1',
+        storageKey: 'key',
+        uploaderId: 'user-1',
+        message: { channelId: 'channel-1' },
+      };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
       prisma.channelMembers.findUnique.mockResolvedValueOnce(null);
-      await expect(service.getDownloadFile('att-1', 'user-2')).rejects.toThrow(ForbiddenException);
+      await expect(service.getDownloadFile('att-1', 'user-2')).rejects.toThrow(
+        ForbiddenException,
+      );
       expect(storage.getDownloadUrl).not.toHaveBeenCalled();
     });
 
     it('выбрасывает ошибку NotFoundException, если вложение не найдено', async () => {
       prisma.attachments.findUnique.mockResolvedValueOnce(null);
-      await expect(service.getDownloadFile('missing', 'user-1')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getDownloadFile('missing', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
       expect(storage.getDownloadUrl).not.toHaveBeenCalled();
     });
   });
 
   describe('getThumbnailUrl', () => {
     it('возвращает URL миниатюры для изображения', async () => {
-      const mockAttachment = { id: 'att-1', thumbKey: 'thumb-key', uploaderId: 'user-1', message: { channelId: 'channel-1' } };
+      const mockAttachment = {
+        id: 'att-1',
+        thumbKey: 'thumb-key',
+        uploaderId: 'user-1',
+        message: { channelId: 'channel-1' },
+      };
       const mockMembership = { channelId: 'channel-1', userId: 'user-1' };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
       prisma.channelMembers.findUnique.mockResolvedValueOnce(mockMembership);
@@ -255,20 +317,36 @@ describe('AttachmentsService', () => {
     });
 
     it('выбрасывает ошибку если миниатюра недоступна', async () => {
-      const mockAttachment = { id: 'att-1', thumbKey: null, uploaderId: 'user-1', message: { channelId: 'channel-1' } };
+      const mockAttachment = {
+        id: 'att-1',
+        thumbKey: null,
+        uploaderId: 'user-1',
+        message: { channelId: 'channel-1' },
+      };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
-      await expect(service.getThumbnailUrl('att-1', 'user-1')).rejects.toThrow(BadRequestException);
+      await expect(service.getThumbnailUrl('att-1', 'user-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('выбрасывает ошибку NotFoundException если вложение не найдено', async () => {
       prisma.attachments.findUnique.mockResolvedValueOnce(null);
-      await expect(service.getThumbnailUrl('missing', 'user-1')).rejects.toThrow(NotFoundException);
+      await expect(
+        service.getThumbnailUrl('missing', 'user-1'),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('выбрасывает ошибку Forbidden для непривязанного вложения не от загрузившего', async () => {
-      const mockAttachment = { id: 'att-1', thumbKey: 'thumb-key', uploaderId: 'user-1', message: null };
+      const mockAttachment = {
+        id: 'att-1',
+        thumbKey: 'thumb-key',
+        uploaderId: 'user-1',
+        message: null,
+      };
       prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
-      await expect(service.getThumbnailUrl('att-1', 'user-2')).rejects.toThrow(ForbiddenException);
+      await expect(service.getThumbnailUrl('att-1', 'user-2')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 });

@@ -2,15 +2,16 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException, Inject
+  NotFoundException,
+  Inject,
 } from '@nestjs/common';
 import { CreateChannelDto } from './create-channel.dto';
 import { UpdateChannelDto } from './update-channel.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelRole, ChannelType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
-import type {EventsPublisher } from '../events/events-publisher.interface';
-import {EVENTS_PUBLISHER} from '../events/events-publisher.interface';
+import type { EventsPublisher } from '../events/events-publisher.interface';
+import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
 @Injectable()
 export class ChannelsService {
   constructor(
@@ -60,7 +61,11 @@ export class ChannelsService {
     }
     if (channel && channel.members) {
       for (const member of channel.members) {
-        this.eventsPublisher.publishToUser(member.userId, 'channel.created', channel);
+        this.eventsPublisher.publishToUser(
+          member.userId,
+          'channel.created',
+          channel,
+        );
       }
     }
     return channel;
@@ -120,7 +125,11 @@ export class ChannelsService {
     });
     if (channel && channel.members) {
       for (const member of channel.members) {
-        this.eventsPublisher.publishToUser(member.userId, 'channel.created', channel);
+        this.eventsPublisher.publishToUser(
+          member.userId,
+          'channel.created',
+          channel,
+        );
         this.eventsPublisher.joinRoom(member.userId, channel.id);
       }
     }
@@ -139,7 +148,9 @@ export class ChannelsService {
       });
 
       if (existing) {
-        const isMember = existing.members.some(m => m.userId === currentUserId);
+        const isMember = existing.members.some(
+          (m) => m.userId === currentUserId,
+        );
         if (!isMember) {
           await this.prisma.channelMembers.create({
             data: {
@@ -156,11 +167,19 @@ export class ChannelsService {
         });
         if (updatedChannel) {
           for (const member of updatedChannel.members) {
-            this.eventsPublisher.publishToUser(member.userId, 'members.updated', {
-              channelId: updatedChannel.id,
-              members: updatedChannel.members,
-            });
-            this.eventsPublisher.publishToUser(member.userId, 'channel.updated', updatedChannel);
+            this.eventsPublisher.publishToUser(
+              member.userId,
+              'members.updated',
+              {
+                channelId: updatedChannel.id,
+                members: updatedChannel.members,
+              },
+            );
+            this.eventsPublisher.publishToUser(
+              member.userId,
+              'channel.updated',
+              updatedChannel,
+            );
           }
         }
         return updatedChannel || existing;
@@ -176,7 +195,10 @@ export class ChannelsService {
           members: {
             create: memberIds.map((userId) => ({
               userId,
-              role: userId === currentUserId ? ChannelRole.owner : ChannelRole.member,
+              role:
+                userId === currentUserId
+                  ? ChannelRole.owner
+                  : ChannelRole.member,
             })),
           },
         },
@@ -185,14 +207,21 @@ export class ChannelsService {
 
       if (newChannel && newChannel.members) {
         for (const member of newChannel.members) {
-          this.eventsPublisher.publishToUser(member.userId, 'channel.created', newChannel);
+          this.eventsPublisher.publishToUser(
+            member.userId,
+            'channel.created',
+            newChannel,
+          );
           this.eventsPublisher.joinRoom(member.userId, newChannel.id);
         }
       }
 
       return newChannel;
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
         const existing = await this.prisma.channels.findFirst({
           where: {
             type: ChannelType.context,
@@ -201,7 +230,9 @@ export class ChannelsService {
           include: { members: { include: { user: true } } },
         });
         if (existing) {
-          const isMember = existing.members.some(m => m.userId === currentUserId);
+          const isMember = existing.members.some(
+            (m) => m.userId === currentUserId,
+          );
           if (!isMember) {
             await this.prisma.channelMembers.create({
               data: {
@@ -217,11 +248,19 @@ export class ChannelsService {
             });
             if (updatedChannel) {
               for (const member of updatedChannel.members) {
-                this.eventsPublisher.publishToUser(member.userId, 'members.updated', {
-                  channelId: updatedChannel.id,
-                  members: updatedChannel.members,
-                });
-                this.eventsPublisher.publishToUser(member.userId, 'channel.updated', updatedChannel);
+                this.eventsPublisher.publishToUser(
+                  member.userId,
+                  'members.updated',
+                  {
+                    channelId: updatedChannel.id,
+                    members: updatedChannel.members,
+                  },
+                );
+                this.eventsPublisher.publishToUser(
+                  member.userId,
+                  'channel.updated',
+                  updatedChannel,
+                );
               }
               return updatedChannel;
             }
@@ -251,7 +290,11 @@ export class ChannelsService {
         members: { some: { userId: currentUserId } },
       },
       include: {
-        messages: { orderBy: { createdAt: 'desc' }, take: 1, include: { files: true } },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { files: true },
+        },
         members: { include: { user: true } },
       },
     });
@@ -278,7 +321,11 @@ export class ChannelsService {
         });
         return {
           ...channel,
-          title: channel.type === ChannelType.direct ? channel.members.find((m) => m.userId !== currentUserId)?.user?.name ?? '' : channel.title,
+          title:
+            channel.type === ChannelType.direct
+              ? (channel.members.find((m) => m.userId !== currentUserId)?.user
+                  ?.name ?? '')
+              : channel.title,
           lastMessage: channel.messages[0] ?? null,
           unreadCount,
         };
@@ -294,7 +341,7 @@ export class ChannelsService {
 
   async markRead(channelId: string, userId: string, messageId: string) {
     const membership = await this.prisma.channelMembers.findUnique({
-    where: { channelId_userId: { channelId, userId } },
+      where: { channelId_userId: { channelId, userId } },
     });
     if (!membership) {
       throw new ForbiddenException('You are not a member of this channel');
@@ -310,10 +357,7 @@ export class ChannelsService {
       data: { lastReadMessageId: messageId },
     });
     const summary = await this.getUnreadSummary(userId);
-    this.eventsPublisher.publishToUser(
-      userId,
-     'unread.changed', 
-    {
+    this.eventsPublisher.publishToUser(userId, 'unread.changed', {
       channelId,
       total: summary.total,
       count: summary.perChannel[channelId] ?? 0,
@@ -351,149 +395,196 @@ export class ChannelsService {
     return { total, perChannel };
   }
   async update(channelId: string, dto: UpdateChannelDto, userId: string) {
-      const membership = await this.prisma.channelMembers.findUnique({
-          where: { channelId_userId: { channelId, userId } },
-      });
-      if (!membership) {
-          throw new ForbiddenException('not a member of this channel');
-      }
-      if (membership.role !== ChannelRole.owner) {
-          throw new ForbiddenException('only the owner can edit the channel');
-      }
+    const membership = await this.prisma.channelMembers.findUnique({
+      where: { channelId_userId: { channelId, userId } },
+    });
+    if (!membership) {
+      throw new ForbiddenException('not a member of this channel');
+    }
+    if (membership.role !== ChannelRole.owner) {
+      throw new ForbiddenException('only the owner can edit the channel');
+    }
 
-      const updated = await this.prisma.channels.update({
-          where: { id: channelId },
-          data: {
-              ...(dto.title !== undefined ? { title: dto.title } : {}),
-              ...(dto.description !== undefined ? { description: dto.description } : {}),
+    const updated = await this.prisma.channels.update({
+      where: { id: channelId },
+      data: {
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.description !== undefined
+          ? { description: dto.description }
+          : {}),
+      },
+      include: {
+        members: {
+          select: {
+            userId: true,
+            role: true,
+            lastReadMessageId: true,
+            user: true,
           },
-          include: { members: {select: {userId: true, role: true, lastReadMessageId: true, user: true}} },
-      });
-      if (updated && updated.members) {
+        },
+      },
+    });
+    if (updated && updated.members) {
       for (const member of updated.members) {
-        this.eventsPublisher.publishToUser(member.userId, 'channel.updated', updated);
+        this.eventsPublisher.publishToUser(
+          member.userId,
+          'channel.updated',
+          updated,
+        );
       }
     }
     return updated;
-      
   }
 
   async addMembers(channelId: string, newUserIds: string[], userId: string) {
-      const membership = await this.prisma.channelMembers.findUnique({
-          where: { channelId_userId: { channelId, userId } },
-      });
-      if (!membership) {
-          throw new ForbiddenException('not a member of this channel');
-      }
-      if (membership.role !== ChannelRole.owner) {
-          throw new ForbiddenException('only the owner can add members');
-      }
+    const membership = await this.prisma.channelMembers.findUnique({
+      where: { channelId_userId: { channelId, userId } },
+    });
+    if (!membership) {
+      throw new ForbiddenException('not a member of this channel');
+    }
+    if (membership.role !== ChannelRole.owner) {
+      throw new ForbiddenException('only the owner can add members');
+    }
 
-      const existing = await this.prisma.channelMembers.findMany({
-          where: { channelId, userId: { in: newUserIds } },
-          select: { userId: true },
-      });
-      const existingIds = new Set(existing.map((m) => m.userId));
-      const toAdd = newUserIds.filter((id) => !existingIds.has(id));
+    const existing = await this.prisma.channelMembers.findMany({
+      where: { channelId, userId: { in: newUserIds } },
+      select: { userId: true },
+    });
+    const existingIds = new Set(existing.map((m) => m.userId));
+    const toAdd = newUserIds.filter((id) => !existingIds.has(id));
 
-      if (toAdd.length > 0) {
-          await this.prisma.channelMembers.createMany({
-              data: toAdd.map((newUserId) => ({
-                  channelId,
-                  userId: newUserId,
-                  role: ChannelRole.member,
-              })),
-          });
-      }
-
-      const updatedChannel = await this.prisma.channels.findUnique({
-          where: { id: channelId },
-          include: { members: { include: { user: true } } },
+    if (toAdd.length > 0) {
+      await this.prisma.channelMembers.createMany({
+        data: toAdd.map((newUserId) => ({
+          channelId,
+          userId: newUserId,
+          role: ChannelRole.member,
+        })),
       });
-      if (updatedChannel && toAdd.length > 0) {
+    }
+
+    const updatedChannel = await this.prisma.channels.findUnique({
+      where: { id: channelId },
+      include: { members: { include: { user: true } } },
+    });
+    if (updatedChannel && toAdd.length > 0) {
       for (const newUserId of toAdd) {
         this.eventsPublisher.joinRoom(newUserId, channelId);
       }
       for (const member of updatedChannel.members) {
-        this.eventsPublisher.publishToUser(member.userId, 'members.updated',{channelId, members: updatedChannel.members});
+        this.eventsPublisher.publishToUser(member.userId, 'members.updated', {
+          channelId,
+          members: updatedChannel.members,
+        });
       }
       for (const member of updatedChannel.members) {
-            this.eventsPublisher.publishToUser(member.userId, 'channel.updated', updatedChannel);
+        this.eventsPublisher.publishToUser(
+          member.userId,
+          'channel.updated',
+          updatedChannel,
+        );
       }
     }
     return updatedChannel;
   }
   async deleteChannel(channelId: string, userId: string) {
     const membership = await this.prisma.channelMembers.findUnique({
-        where: { channelId_userId: { channelId, userId } },
+      where: { channelId_userId: { channelId, userId } },
     });
     if (!membership) {
-        throw new ForbiddenException('not a member of this channel');
+      throw new ForbiddenException('not a member of this channel');
     }
     if (membership.role !== ChannelRole.owner) {
-        throw new ForbiddenException('only the owner can delete the channel');
+      throw new ForbiddenException('only the owner can delete the channel');
     }
     const channel = await this.prisma.channels.findUnique({
-        where: { id: channelId },
-        include: { members: true },
+      where: { id: channelId },
+      include: { members: true },
     });
     await this.prisma.channels.update({
-        where: { id: channelId },
-        data: { archivedAt: new Date() },
+      where: { id: channelId },
+      data: { archivedAt: new Date() },
     });
 
     if (channel) {
-        for (const member of channel.members) {
-            this.eventsPublisher.publishToUser(member.userId, 'channel.deleted', {channelId});
-        }
+      for (const member of channel.members) {
+        this.eventsPublisher.publishToUser(member.userId, 'channel.deleted', {
+          channelId,
+        });
+      }
     }
     return { ok: true };
-}
-  async removeMember(channelId: string, targetUserId: string, requesterId: string) {
-      const requesterMembership = await this.prisma.channelMembers.findUnique({
-          where: { channelId_userId: { channelId, userId: requesterId } },
-      });
-      if (!requesterMembership) {
-          throw new ForbiddenException('not a member of this channel');
-      }
-
-      const isSelfLeaving = requesterId === targetUserId;
-      if (isSelfLeaving && requesterMembership.role === ChannelRole.owner) {
-           const otherMembers = await this.prisma.channelMembers.findMany({
-            where: {channelId, userId: { not: targetUserId }},
-          });
-          if (otherMembers.length > 0) {
-            const newOwner = otherMembers[0];
-            await this.prisma.channelMembers.update({
-              where: { 
-                channelId_userId: { channelId, userId: newOwner.userId } 
-              },
-              data: { role: ChannelRole.owner },
-          });
-          } 
-          else {
-            await this.prisma.channels.update({
-              where: { id: channelId },
-              data: { archivedAt: new Date() },
-            });
-            this.eventsPublisher.publishToUser(targetUserId, 'channel.deleted', { channelId });
-            return { ok: true };
-          }
-        }
-        if (!isSelfLeaving && requesterMembership.role !== ChannelRole.owner) {
-          throw new ForbiddenException('only the owner can remove other members');
-        }
-      await this.prisma.channelMembers.delete({
-          where: { channelId_userId: { channelId, userId: targetUserId } },
-      });
-      const updatedChannel = await this.prisma.channels.findUnique({where: { id: channelId }, include: { members: { include: { user: true } } }});
-      if (updatedChannel){
-        const payload = {channelId, userId: targetUserId, members: updatedChannel.members};
-        for (const member of updatedChannel.members) {
-            this.eventsPublisher.publishToUser(member.userId, 'member.removed',payload);
-            this.eventsPublisher.publishToUser(member.userId, 'channel.updated', updatedChannel);
+  }
+  async removeMember(
+    channelId: string,
+    targetUserId: string,
+    requesterId: string,
+  ) {
+    const requesterMembership = await this.prisma.channelMembers.findUnique({
+      where: { channelId_userId: { channelId, userId: requesterId } },
+    });
+    if (!requesterMembership) {
+      throw new ForbiddenException('not a member of this channel');
     }
-      this.eventsPublisher.publishToUser(targetUserId, 'member.removed', payload);
+
+    const isSelfLeaving = requesterId === targetUserId;
+    if (isSelfLeaving && requesterMembership.role === ChannelRole.owner) {
+      const otherMembers = await this.prisma.channelMembers.findMany({
+        where: { channelId, userId: { not: targetUserId } },
+      });
+      if (otherMembers.length > 0) {
+        const newOwner = otherMembers[0];
+        await this.prisma.channelMembers.update({
+          where: {
+            channelId_userId: { channelId, userId: newOwner.userId },
+          },
+          data: { role: ChannelRole.owner },
+        });
+      } else {
+        await this.prisma.channels.update({
+          where: { id: channelId },
+          data: { archivedAt: new Date() },
+        });
+        this.eventsPublisher.publishToUser(targetUserId, 'channel.deleted', {
+          channelId,
+        });
+        return { ok: true };
+      }
+    }
+    if (!isSelfLeaving && requesterMembership.role !== ChannelRole.owner) {
+      throw new ForbiddenException('only the owner can remove other members');
+    }
+    await this.prisma.channelMembers.delete({
+      where: { channelId_userId: { channelId, userId: targetUserId } },
+    });
+    const updatedChannel = await this.prisma.channels.findUnique({
+      where: { id: channelId },
+      include: { members: { include: { user: true } } },
+    });
+    if (updatedChannel) {
+      const payload = {
+        channelId,
+        userId: targetUserId,
+        members: updatedChannel.members,
+      };
+      for (const member of updatedChannel.members) {
+        this.eventsPublisher.publishToUser(
+          member.userId,
+          'member.removed',
+          payload,
+        );
+        this.eventsPublisher.publishToUser(
+          member.userId,
+          'channel.updated',
+          updatedChannel,
+        );
+      }
+      this.eventsPublisher.publishToUser(
+        targetUserId,
+        'member.removed',
+        payload,
+      );
       return { ok: true };
     }
   }

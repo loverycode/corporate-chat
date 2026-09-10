@@ -9,10 +9,13 @@ import { MessagesGateway } from '../messages/messages.gateway';
 @Module({
   imports: [PrismaModule, MessagesModule],
   controllers: [ChannelsController, UnreadController, PresenceController],
-  providers: [ChannelsService, {
+  providers: [
+    ChannelsService,
+    {
       provide: EVENTS_PUBLISHER,
-      useExisting: MessagesGateway, 
-    },],
+      useExisting: MessagesGateway,
+    },
+  ],
   exports: [ChannelsService],
 })
 export class ChannelsModule {}

@@ -11,7 +11,7 @@ export class CreateChannelDto {
   @IsOptional()
   @IsString()
   description?: string;
-  
+
   @IsOptional()
   @IsUUID()
   contextObjectId?: string;

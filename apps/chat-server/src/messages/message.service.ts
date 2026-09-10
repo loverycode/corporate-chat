@@ -1,6 +1,11 @@
-import {PrismaService} from '../prisma/prisma.service';
-import {CreateMessageDto} from './create-message.dto';
-import {ForbiddenException, Injectable, NotFoundException, BadRequestException} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateMessageDto } from './create-message.dto';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { MessagesGateway } from './messages.gateway';
 import { ObjectsService } from '../objects/objects.service';
 import { UpdateMessageDto } from './update-message.dto';
@@ -35,10 +40,12 @@ export class MessagesService {
     await this.assertMember(channelId, authorId);
     const bodyMd = dto.bodyMd?.trim() ?? '';
     if (!bodyMd && (!dto.attachmentIds || dto.attachmentIds.length === 0)) {
-      throw new BadRequestException('Message must contain text or at least one attachment');
+      throw new BadRequestException(
+        'Message must contain text or at least one attachment',
+      );
     }
     if (dto.attachmentIds && dto.attachmentIds.length > 10) {
-        throw new BadRequestException('Maximum 10 attachments per message');
+      throw new BadRequestException('Maximum 10 attachments per message');
     }
     const existing = await this.prisma.messages.findUnique({
       where: {
@@ -123,7 +130,9 @@ export class MessagesService {
       });
 
       if (attachments.length !== dto.attachmentIds.length) {
-        throw new BadRequestException('Some attachments are invalid or from other channels');
+        throw new BadRequestException(
+          'Some attachments are invalid or from other channels',
+        );
       }
       await this.prisma.attachments.updateMany({
         where: {
@@ -190,7 +199,12 @@ export class MessagesService {
             }
           }
 
-          this.gateway.emitUnreadChanged(userId, total, channelId, countForChannel);
+          this.gateway.emitUnreadChanged(
+            userId,
+            total,
+            channelId,
+            countForChannel,
+          );
         }),
       );
     }
@@ -241,7 +255,12 @@ export class MessagesService {
     return { ok: true };
   }
 
-  async findHistory(channelId: string, userId: string, cursor?: string, limit = 30) {
+  async findHistory(
+    channelId: string,
+    userId: string,
+    cursor?: string,
+    limit = 30,
+  ) {
     await this.assertMember(channelId, userId);
     const messages = await this.prisma.messages.findMany({
       where: { channelId },
@@ -264,7 +283,10 @@ export class MessagesService {
           const refsWithAccess = await Promise.all(
             message.refs.map(async (ref) => {
               try {
-                const hasAccess = await this.objectsService.checkAccess(ref.objectId, userId);
+                const hasAccess = await this.objectsService.checkAccess(
+                  ref.objectId,
+                  userId,
+                );
                 if (!hasAccess) {
                   return {
                     ...ref,
