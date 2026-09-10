@@ -11,19 +11,20 @@ export function LoginScreen({onLogin}: {onLogin: (userId: string, userName: stri
     const [loading, setLoading]=useState<string| null>(null);
     const [error, setError]=useState<string | null>(null);
     const {t}=useTranslation();
-    async function handleLogin(userId: string, name: string){
-        setLoading(userId);
-        setError(null);
-        try{
-            const {token} = await api.getToken(userId);
-            setAuthToken(token);
-            onLogin(userId, name);
-        }catch(err){
-            setError( err instanceof Error ? err.message : 'Ошибка входа');
-        }finally{
-            setLoading(null);
-        }
+    
+async function handleLogin(userId: string, name: string){
+    setLoading(userId);
+    setError(null);
+    try{
+        const {token} = await api.getToken(userId);
+        setAuthToken(token);
+        onLogin(userId, name);
+    }catch(err){
+        setError( err instanceof Error ? err.message : 'Ошибка входа');
+    }finally{
+        setLoading(null);
     }
+}
         return(
             <Box
                 sx={{

@@ -1,5 +1,9 @@
-const ALLOWED_PORTAL_ORIGIN = import.meta.env.VITE_PORTAL_ORIGIN || '*';
-
+const ALLOWED_PORTAL_ORIGIN = import.meta.env.VITE_PORTAL_ORIGIN;
+if (!ALLOWED_PORTAL_ORIGIN) {
+    throw new Error(
+        'VITE_PORTAL_ORIGIN is not configured',
+    );
+}
 export function sendToPortal(type: string, payload?: Record<string, unknown>) {
     if (window.parent === window) return; 
     window.parent.postMessage({ type, ...payload }, ALLOWED_PORTAL_ORIGIN);
@@ -25,7 +29,7 @@ type PortalMessageHandler = (data: any) => void;
 
 export function listenToPortal(handlers: Record<string, PortalMessageHandler>) {
     function handleMessage(event: MessageEvent) {
-        if (ALLOWED_PORTAL_ORIGIN !== '*' && event.origin !== ALLOWED_PORTAL_ORIGIN) {
+        if (event.origin !== ALLOWED_PORTAL_ORIGIN) {
             return; 
         }
         const { type, ...payload } = event.data || {};

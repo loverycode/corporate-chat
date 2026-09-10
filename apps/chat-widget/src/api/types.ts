@@ -7,6 +7,8 @@ export interface Channel{
     createdBy: string;
     members: ChannelMember[];
     unreadCount: number;
+    description: string | null;
+    lastMessage?: Message | null;
 }
 
 export interface ChannelMember {
@@ -55,6 +57,7 @@ export interface ObjectRef {
     snapshotTitle: string;  
     snapshotTypeName: string;  
     snapshotIcon: string;  
+    canRead?: boolean;
 }
 
 export interface Mention{

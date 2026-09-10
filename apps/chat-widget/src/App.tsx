@@ -2,24 +2,41 @@ import { useState, useEffect } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { ChannelList } from './components/ChannelList';
 import { MessageList } from './components/MessageList';
-import { connectSocket, disconnectSocket, getSocket } from './api/socket';
+import { connectSocket, disconnectSocket} from './api/socket';
 import { api, setAuthToken } from './api/client';
-import { listenToPortal, sendReady, sendOpenObject, requestTokenRefresh } from './postMessage';
+import type {ChannelMember } from './api/types';
 import { decodeToken } from './utils/decodeToken';
-import { ThemeProvider, CssBaseline, Box } from '@mui/material';
+import { ThemeProvider, CssBaseline, Box, useMediaQuery } from '@mui/material';
 import { createAppTheme } from './theme';
-import { LocaleProvider } from './i18n/localeContext';
+import { LocaleProvider, useTranslation } from './i18n/localeContext';
+import { sendReady, sendUnreadCount, listenToPortal, requestTokenRefresh } from './postMessage';
 
 function App() {
     const [currentUser, setCurrentUser] = useState<{ id: string; name: string } | null>(null);
-    const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+    const [selectedChannelId, setSelectedChannelId] = useState<string | null>(() => {
+        return new URLSearchParams(window.location.search).get('channel');
+    });    
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
     const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
     const [locale, setLocale] = useState<'ru' | 'en'>('ru');
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
+    const { t } = useTranslation();
 
-    // ✅ Все useEffect – на верхнем уровне, без ранних return
+    const updateUnreadCount = async () => {
+        try {
+            const summary = await api.getUnreadSummary();
+            sendUnreadCount(summary.total);
+        } catch (error) {
+            if (error instanceof Error && error.message === 'Token expired') {
+                requestTokenRefresh();
+                setAuthToken(null);
+                setCurrentUser(null);
+            }
+            setRefreshTrigger((v) => v + 1);
+        }
+    };
+
     useEffect(() => {
         sendReady();
     }, []);
@@ -30,6 +47,7 @@ function App() {
                 const payload = decodeToken(token);
                 setAuthToken(token);
                 setCurrentUser({ id: payload.sub, name: payload.name });
+                setTimeout(updateUnreadCount, 100);
             },
             'portal:open': async ({ channelId, contextObjectId, userId }: { channelId?: string; contextObjectId?: string; userId?: string }) => {
                 if (channelId) {
@@ -55,31 +73,29 @@ function App() {
             },
         });
         return unsubscribe;
-    }, [currentUser]); // зависимость от currentUser – ок
+    }, [currentUser]); 
 
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const channelParam = params.get('channel');
-        const contextParam = params.get('context');
-        if (channelParam) {
-            setSelectedChannelId(channelParam);
-        } else if (contextParam && currentUser) {
+        const contextParam = new URLSearchParams(window.location.search).get('context');
+        if (contextParam && currentUser && !selectedChannelId) {
             api.createChannel('context', [currentUser.id], undefined, contextParam).then((ch) => {
                 setSelectedChannelId(ch.id);
             });
         }
-    }, [currentUser]); // зависит от currentUser
+    }, [currentUser, selectedChannelId]);
 
     useEffect(() => {
-        if (!currentUser) return; // условие внутри хука, а не до него
+        if (!currentUser) return; 
+        updateUnreadCount();
         api.getOnlinePresence()
             .then((ids) => setOnlineUserIds(new Set(ids)))
             .catch(() => {});
     }, [currentUser]);
 
     useEffect(() => {
-        if (!currentUser) return; // условие внутри хука
+        if (!currentUser) return; 
         const socket = connectSocket();
+
         function handlePresenceChanged(data: { userId: string; online: boolean }) {
             setOnlineUserIds((prev) => {
                 const next = new Set(prev);
@@ -92,27 +108,59 @@ function App() {
             });
         }
 
-        function handleUnreadChanged() {
-            setRefreshTrigger((v) => v + 1);
+        function handleChannelCreated() {
+            setRefreshTrigger(prev => prev + 1);
+        }
+
+        function handleChannelDeleted(data: { channelId: string }) {
+            setRefreshTrigger(prev => prev + 1);
+            if (selectedChannelId === data.channelId) {
+                setSelectedChannelId(null);
+            }
+        }
+
+        function handleMemberRemoved(data:{channelId: string; userId: string; members:ChannelMember[]}){
+            setRefreshTrigger(prev=>prev+1);
+            if (data.userId===currentUser?.id){
+                setSelectedChannelId(null);
+                setTimeout(updateUnreadCount, 100);
+            }
+        }
+
+        function handleMembersUpdated(){
+            setRefreshTrigger(prev=>prev+1);
         }
 
         socket.on('presence.changed', handlePresenceChanged);
-        socket.on('unread.changed', handleUnreadChanged);
+        socket.on('channel.created', handleChannelCreated);
+        socket.on('channel.deleted', handleChannelDeleted);
+        socket.on('member.removed', handleMemberRemoved);
+        socket.on('members.updated', handleMembersUpdated);
 
         return () => {
             socket.off('presence.changed', handlePresenceChanged);
-            socket.off('unread.changed', handleUnreadChanged);
+            socket.off('channel.created', handleChannelCreated);
+            socket.off('channel.deleted', handleChannelDeleted);
+            socket.off('member.removed', handleMemberRemoved);
+            socket.off('members.updated', handleMembersUpdated);
             disconnectSocket();
         };
-    }, [currentUser]);
+    }, [currentUser]); 
 
     const theme = createAppTheme(themeMode);
+    const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+    const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 
     if (!currentUser) {
         return (
             <ThemeProvider theme={theme}>
                 <CssBaseline />
-                <LoginScreen onLogin={(id, name) => setCurrentUser({ id, name })} />
+                {DEMO_MODE ? (
+                    <LoginScreen onLogin={(id, name) => setCurrentUser({ id, name })} />
+                ):
+                (<Box sx={{height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                    Ожидание авторизации портала…
+                </Box>)}
             </ThemeProvider>
         );
     }
@@ -126,32 +174,34 @@ function App() {
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <LocaleProvider locale={locale}>
-                <Box sx={{ display: 'flex', height: '100vh' }}>
-                    <ChannelList
-                        currentUser={currentUser}
-                        selectedChannelId={selectedChannelId}
-                        onSelectChannel={setSelectedChannelId}
-                        refreshTrigger={refreshTrigger}
-                        onlineUserIds={onlineUserIds}
-                        onSelectMessage={handleSelectMessage}
-                        themeMode={themeMode}
-                        onToggleTheme={() => setThemeMode((m) => (m === 'light' ? 'dark' : 'light'))}
-                        locale={locale}
-                        onToggleLocale={() => setLocale((l) => (l === 'ru' ? 'en' : 'ru'))}
-                    />
+                <Box sx={{ display: 'flex', width: '100%', height: '100vh', overflow: 'hidden', flexDirection: { xs: 'column', sm: 'row' } }}>
+                    {(!isMobile || !selectedChannelId) && (
+                        <ChannelList
+                            sx={isMobile ? { width: '100%' } : { width: 280 }}
+                            currentUser={currentUser}
+                            selectedChannelId={selectedChannelId}
+                            onSelectChannel={setSelectedChannelId}
+                            refreshTrigger={refreshTrigger}
+                            onlineUserIds={onlineUserIds}
+                            onSelectMessage={handleSelectMessage}
+                        />
+                    )}
 
-                    {selectedChannelId ? (
+                    {(!isMobile || selectedChannelId) && selectedChannelId ? (
                         <MessageList
+                            key={selectedChannelId}
                             channelId={selectedChannelId}
                             currentUserId={currentUser.id}
                             targetMessageId={targetMessageId}
                             onTargetHandled={() => setTargetMessageId(null)}
+                            onBack={isMobile ? () => setSelectedChannelId(null) : undefined}
+                            onlineUserIds={onlineUserIds}
                         />
-                    ) : (
-                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            Выберите канал
+                    ) : !isMobile ? (
+                        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p:2, minWidth: 0}}>
+                             {t('selectChannel')}
                         </Box>
-                    )}
+                    ): null}
                 </Box>
             </LocaleProvider>
         </ThemeProvider>
