@@ -14,16 +14,18 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { HealthModule } from './health/health.module';
 import { LoggerModule } from 'nestjs-pino';
+import { randomUUID } from 'crypto';
 @Module({
   imports: [
     LoggerModule.forRoot({
       pinoHttp: {
         genReqId: (req) => req.headers['x-request-id'] || crypto.randomUUID(),
         customProps: (req) => ({ requestId: req.id }),
+        transport: process.env.NODE_ENV !== 'production' ? { target: 'pino-pretty' } : undefined,
         level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
       },
     }),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 30 }]),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     AuthModule,
     UsersModule,

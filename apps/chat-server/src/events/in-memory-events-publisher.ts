@@ -11,9 +11,15 @@ export class InMemoryEventsPublisher implements EventsPublisher {
     this.server?.to(channelId).emit(event, payload);
   }
   publishToUser(userId: string, event: string, payload: unknown): void {
-    this.server?.to(userId).emit(event, payload);
+    this.server?.to(`user:${userId}`).emit(event, payload);
   }
   publishToAll(event: string, payload: unknown): void {
     this.server?.emit(event, payload);
+  }
+  joinRoom(userId: string, channelId: string): void {
+    this.server?.in(`user:${userId}`).socketsJoin(channelId);
+  }
+  leaveRoom(userId: string, channelId: string): void {
+    this.server?.in(`user:${userId}`).socketsLeave(channelId);
   }
 }
