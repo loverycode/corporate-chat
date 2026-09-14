@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import {
   S3Client,
   PutObjectCommand,
@@ -15,6 +15,7 @@ const BUCKET = 'chat-files';
 export class StorageService implements OnModuleInit {
   private readonly client: S3Client;
   private readonly publicClient: S3Client;
+  private readonly logger = new Logger(StorageService.name);
 
   constructor() {
     const credentials = {
@@ -39,7 +40,20 @@ export class StorageService implements OnModuleInit {
     try {
       await this.client.send(new HeadBucketCommand({ Bucket: BUCKET }));
     } catch {
-      await this.client.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      try {
+        await this.client.send(new CreateBucketCommand({ Bucket: BUCKET }));
+      } catch (err: any) {
+        const name = err?.name ?? err?.Code;
+        if (
+          name === 'BucketAlreadyOwnedByYou' ||
+          name === 'BucketAlreadyExists'
+        ) {
+          return;
+        }
+        this.logger.warn(
+          `Не удалось создать bucket "${BUCKET}": ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
   }
 
