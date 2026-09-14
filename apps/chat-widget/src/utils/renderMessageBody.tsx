@@ -1,8 +1,28 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import type { ReactNode } from "react";
+import type { ReactNode, ComponentType } from "react";
 import type { ObjectRef } from "../api/types";
 import { sendOpenObject } from "../postMessage";
+import { Paper, Box, Typography } from '@mui/material';
+import ApartmentIcon from '@mui/icons-material/Apartment';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import DescriptionIcon from '@mui/icons-material/Description';
+import FolderIcon from '@mui/icons-material/Folder';
+import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
+import PersonIcon from '@mui/icons-material/Person';
+import EventIcon from '@mui/icons-material/Event';
+import LockIcon from '@mui/icons-material/Lock';
+
+const OBJECT_ICON_MAP: Record<string, ComponentType<{ fontSize?: 'inherit' | 'small' }>> = {
+    Apartment: ApartmentIcon,
+    Assignment: AssignmentIcon,
+    Description: DescriptionIcon,
+    Folder: FolderIcon,
+    BusinessCenter: BusinessCenterIcon,
+    Person: PersonIcon,
+    Event: EventIcon,
+};
+const DEFAULT_OBJECT_ICON = DescriptionIcon;
 
 const PORTAL_PUBLIC_URLS = import.meta.env.VITE_PORTAL_PUBLIC_URLS 
     ? import.meta.env.VITE_PORTAL_PUBLIC_URLS.split(',').map((url: string) => url.trim())
@@ -74,10 +94,10 @@ export function renderMessageBody(bodyMd: string, refs: ObjectRef[], members: Me
         else{
             const member = members.find((m)=>m.userId===match.id);
             parts.push(
-            <span key={key++} style={{ color: '#3b5a7a', fontWeight: 600 }}>
-               @{member?.name || t('user') || 'Пользователь'} 
+            <span key={key++} style={{ fontWeight: 700, textDecoration: 'underline' }}>
+               @{member?.name || t('user') || 'Пользователь'}{' '}  
             </span>
-            );
+            )
         }
         lastIndex=match.end;
     }
@@ -88,12 +108,28 @@ export function renderMessageBody(bodyMd: string, refs: ObjectRef[], members: Me
 
 function ObjectCard({ref, t}: {ref?: ObjectRef, t:(key: string)=>string}){
     if (!ref || !ref.snapshotTitle || !ref.snapshotTitle.trim() || ref.canRead === false){
-        return <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>{t('objectUnavailable')}</span>;
+        return (
+            <Paper
+                variant="outlined"
+                sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, mb: 0.5, opacity: 0.7 }}
+            >
+                <LockIcon fontSize="small" />
+                <Typography variant="body2" sx={{ fontStyle: 'italic' }}>{t('objectUnavailable')}</Typography>
+            </Paper>
+        );
     }
+    const IconComponent = OBJECT_ICON_MAP[ref.snapshotIcon ?? ''] ?? DEFAULT_OBJECT_ICON;
     return (
-        <span  onClick={()=>sendOpenObject(ref.objectId)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fafafa', fontSize: '0.85em' }}>
-             {ref.snapshotTypeName}: {ref.snapshotTitle}
-        </span>
+        <Paper
+            variant="outlined"
+            onClick={() => sendOpenObject(ref.objectId)}
+            sx={{ p: 1, display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, mb: 0.5, cursor: 'pointer' }}
+        >
+            <IconComponent fontSize="small" />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="body2" noWrap>{ref.snapshotTitle}</Typography>
+                <Typography variant="caption" color="text.secondary">{ref.snapshotTypeName}</Typography>
+            </Box>
+        </Paper>
     );
 }
-

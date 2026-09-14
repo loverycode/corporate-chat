@@ -3,8 +3,11 @@ import {Box, Button, Typography, Stack, CircularProgress, Alert} from '@mui/mate
 import {api, setAuthToken} from '../api/client';
 import { useTranslation } from "../i18n/localeContext";
 const TEST_USERS = [
-    { id: 'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99', name: 'Тест Тестов' },
-    { id: '21be610f-8ec5-4225-8880-a80d7029c2ea', name: 'Второй Пользователь' },
+    { id: 'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99', name: 'Юрий Тестировщик' },
+    { id: '21be610f-8ec5-4225-8880-a80d7029c2ea', name: 'Андрей Проджект' },
+    { id: 'c3d4e5f6-1a2b-4c3d-9e4f-5a6b7c8d9e0f', name: 'Мария Иванова' },
+    { id: 'd4e5f6a7-2b3c-4d4e-8f5a-6b7c8d9e0f1a', name: 'Дмитрий Петров' },
+    { id: 'e5f6a7b8-3c4d-4e5f-9a6b-7c8d9e0f1a2b', name: 'Анна Смирнова' },
 ];
 
 export function LoginScreen({onLogin}: {onLogin: (userId: string, userName: string)=> void}){

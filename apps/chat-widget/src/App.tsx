@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { ChannelList } from './components/ChannelList';
 import { MessageList } from './components/MessageList';
@@ -22,6 +22,8 @@ function App() {
     const [locale, setLocale] = useState<'ru' | 'en'>('ru');
     const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
     const { t } = useTranslation();
+    const selectedChannelIdRef = useRef(selectedChannelId);
+    useEffect(() => { selectedChannelIdRef.current = selectedChannelId; }, [selectedChannelId]);
 
     const updateUnreadCount = async () => {
         try {
@@ -47,6 +49,9 @@ function App() {
                 const payload = decodeToken(token);
                 setAuthToken(token);
                 setCurrentUser({ id: payload.sub, name: payload.name });
+                setSelectedChannelId(null);
+                setTargetMessageId(null);
+                setRefreshTrigger((v) => v + 1);
                 setTimeout(updateUnreadCount, 100);
             },
             'portal:open': async ({ channelId, contextObjectId, userId }: { channelId?: string; contextObjectId?: string; userId?: string }) => {
@@ -114,7 +119,7 @@ function App() {
 
         function handleChannelDeleted(data: { channelId: string }) {
             setRefreshTrigger(prev => prev + 1);
-            if (selectedChannelId === data.channelId) {
+            if (selectedChannelIdRef.current === data.channelId) {
                 setSelectedChannelId(null);
             }
         }
@@ -131,11 +136,16 @@ function App() {
             setRefreshTrigger(prev=>prev+1);
         }
 
+        function handleUnreadChanged(){
+            updateUnreadCount();
+        }
+
         socket.on('presence.changed', handlePresenceChanged);
         socket.on('channel.created', handleChannelCreated);
         socket.on('channel.deleted', handleChannelDeleted);
         socket.on('member.removed', handleMemberRemoved);
         socket.on('members.updated', handleMembersUpdated);
+        socket.on('unread.changed', handleUnreadChanged);
 
         return () => {
             socket.off('presence.changed', handlePresenceChanged);
@@ -143,6 +153,7 @@ function App() {
             socket.off('channel.deleted', handleChannelDeleted);
             socket.off('member.removed', handleMemberRemoved);
             socket.off('members.updated', handleMembersUpdated);
+            socket.off('unread.changed', handleUnreadChanged);
             disconnectSocket();
         };
     }, [currentUser]); 
