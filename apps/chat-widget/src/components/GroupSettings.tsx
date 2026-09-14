@@ -125,8 +125,10 @@ export function GroupSettings({ open, channel, currentUserId, onClose, onUpdated
             <DialogTitle>{t('groupSettings')}</DialogTitle>
             <DialogContent>
                 <TextField fullWidth label={t('groupName')} value={title} onChange={(e) => setTitle(e.target.value)} disabled={!isOwner} sx={{ mb: 2, mt: 1 }}/>
-                <TextField fullWidth multiline minRows={2} label={t('groupDescription')} value={description} onChange={(e) => setDescription(e.target.value)} disabled={!isOwner} sx={{ mb: 2 }}/>
-                {isOwner && (
+                {channel.type!=='context' && (
+                    <TextField fullWidth multiline minRows={2} label={t('groupDescription')} value={description} onChange={(e) => setDescription(e.target.value)} disabled={!isOwner} sx={{ mb: 2 }}/>
+                )}
+                {isOwner  && (
                     <Button variant="outlined" size="small" onClick={handleSaveInfo} disabled={saving} sx={{ mb: 2 }}>
                         {t('saveChanges')}
                     </Button>
