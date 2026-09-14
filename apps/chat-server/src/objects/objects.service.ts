@@ -105,4 +105,23 @@ export class ObjectsService {
       return false;
     }
   }
+
+  async checkAccessBatch(
+    objectIds: string[],
+    userId: string,
+  ): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    if (objectIds.length === 0) return result;
+    try {
+      const resolved = await this.resolveObjects(objectIds, userId);
+      for (const id of objectIds) {
+        result.set(id, resolved.get(id)?.canRead ?? false);
+      }
+    } catch {
+      for (const id of objectIds) {
+        result.set(id, false);
+      }
+    }
+    return result;
+  }
 }

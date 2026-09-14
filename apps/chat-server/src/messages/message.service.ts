@@ -1,11 +1,6 @@
-import { PrismaService } from '../prisma/prisma.service';
-import { CreateMessageDto } from './create-message.dto';
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import {PrismaService} from '../prisma/prisma.service';
+import {CreateMessageDto} from './create-message.dto';
+import {ForbiddenException, Injectable, NotFoundException, BadRequestException} from '@nestjs/common';
 import { MessagesGateway } from './messages.gateway';
 import { ObjectsService } from '../objects/objects.service';
 import { UpdateMessageDto } from './update-message.dto';
@@ -38,12 +33,6 @@ export class MessagesService {
 
   async create(channelId: string, dto: CreateMessageDto, authorId: string) {
     await this.assertMember(channelId, authorId);
-    const bodyMd = dto.bodyMd?.trim() ?? '';
-    if (!bodyMd && (!dto.attachmentIds || dto.attachmentIds.length === 0)) {
-      throw new BadRequestException(
-        'Message must contain text or at least one attachment',
-      );
-    }
     if (dto.attachmentIds && dto.attachmentIds.length > 10) {
       throw new BadRequestException('Maximum 10 attachments per message');
     }
@@ -70,12 +59,12 @@ export class MessagesService {
       data: {
         channelId,
         authorId,
-        bodyMd,
+        bodyMd: dto.bodyMd,
         replyToId: dto.replyToId,
         clientMessageId: dto.clientMessageId,
       },
     });
-    const objectIds = this.objectsService.extractObjectIds(bodyMd);
+    const objectIds = this.objectsService.extractObjectIds(dto.bodyMd);
     if (objectIds.length > 0) {
       const resolved = await this.objectsService.resolveObjects(
         objectIds,
@@ -130,9 +119,7 @@ export class MessagesService {
       });
 
       if (attachments.length !== dto.attachmentIds.length) {
-        throw new BadRequestException(
-          'Some attachments are invalid or from other channels',
-        );
+        throw new BadRequestException('Some attachments are invalid or from other channels');
       }
       await this.prisma.attachments.updateMany({
         where: {
@@ -157,9 +144,39 @@ export class MessagesService {
       },
     });
 
-    this.gateway.emitMessageCreated(channelId, messageWithRelations);
+    if (messageWithRelations && messageWithRelations.refs && messageWithRelations.refs.length > 0) {
+      await this.emitMessageCreatedWithPerViewerAccess(channelId, messageWithRelations);
+    } else {
+      this.gateway.emitMessageCreated(channelId, messageWithRelations);
+    }
     await this.notifyUnreadChanged(channelId, authorId);
     return messageWithRelations;
+  }
+
+  private async emitMessageCreatedWithPerViewerAccess(
+    channelId: string,
+    message: { refs: { objectId: string }[] } & Record<string, unknown>,
+  ) {
+    const members = await this.prisma.channelMembers.findMany({
+      where: { channelId },
+      select: { userId: true },
+    });
+
+    const objectIds = message.refs.map((r) => r.objectId);
+
+    await Promise.all(
+      members.map(async ({ userId }) => {
+        const accessMap = await this.objectsService.checkAccessBatch(objectIds, userId);
+        const refsForViewer = message.refs.map((ref: any) => {
+          const hasAccess = accessMap.get(ref.objectId) ?? false;
+          if (!hasAccess) {
+            return { ...ref, snapshotTitle: null, snapshotTypeName: null, canRead: false };
+          }
+          return { ...ref, canRead: true };
+        });
+        this.gateway.emitToUser(userId, 'message.created', { ...message, refs: refsForViewer });
+      }),
+    );
   }
 
   private async notifyUnreadChanged(channelId: string, authorId: string) {
@@ -167,47 +184,41 @@ export class MessagesService {
       where: { channelId, userId: { not: authorId } },
       select: { userId: true },
     });
-    if (otherMembers && otherMembers.length > 0) {
-      await Promise.all(
-        otherMembers.map(async ({ userId }) => {
-          const memberships = await this.prisma.channelMembers.findMany({
-            where: { userId },
-            select: { channelId: true, lastReadMessageId: true },
+
+    await Promise.all(
+      otherMembers.map(async ({ userId }) => {
+        const memberships = await this.prisma.channelMembers.findMany({
+          where: { userId },
+          select: { channelId: true, lastReadMessageId: true },
+        });
+
+        let total = 0;
+        let countForChannel = 0;
+        for (const membership of memberships) {
+          const count = await this.prisma.messages.count({
+            where: {
+              channelId: membership.channelId,
+              deletedAt: null,
+              ...(membership.lastReadMessageId
+                ? {
+                    createdAt: {
+                      gt: await this.getMessageCreatedAt(
+                        membership.lastReadMessageId,
+                      ),
+                    },
+                  }
+                : {}),
+            },
           });
-
-          let total = 0;
-          let countForChannel = 0;
-          for (const membership of memberships) {
-            const count = await this.prisma.messages.count({
-              where: {
-                channelId: membership.channelId,
-                deletedAt: null,
-                ...(membership.lastReadMessageId
-                  ? {
-                      createdAt: {
-                        gt: await this.getMessageCreatedAt(
-                          membership.lastReadMessageId,
-                        ),
-                      },
-                    }
-                  : {}),
-              },
-            });
-            total += count;
-            if (membership.channelId === channelId) {
-              countForChannel = count;
-            }
+          total += count;
+          if (membership.channelId === channelId) {
+            countForChannel = count;
           }
+        }
 
-          this.gateway.emitUnreadChanged(
-            userId,
-            total,
-            channelId,
-            countForChannel,
-          );
-        }),
-      );
-    }
+        this.gateway.emitUnreadChanged(userId, total, channelId, countForChannel);
+      }),
+    );
   }
 
   private async getMessageCreatedAt(messageId: string): Promise<Date> {
@@ -255,12 +266,7 @@ export class MessagesService {
     return { ok: true };
   }
 
-  async findHistory(
-    channelId: string,
-    userId: string,
-    cursor?: string,
-    limit = 30,
-  ) {
+  async findHistory(channelId: string, userId: string, cursor?: string, limit = 30) {
     await this.assertMember(channelId, userId);
     const messages = await this.prisma.messages.findMany({
       where: { channelId },
@@ -277,40 +283,31 @@ export class MessagesService {
       },
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     });
-    const messagesWithAccess = await Promise.all(
-      messages.map(async (message) => {
-        if (message.refs && message.refs.length > 0) {
-          const refsWithAccess = await Promise.all(
-            message.refs.map(async (ref) => {
-              try {
-                const hasAccess = await this.objectsService.checkAccess(
-                  ref.objectId,
-                  userId,
-                );
-                if (!hasAccess) {
-                  return {
-                    ...ref,
-                    snapshotTitle: null,
-                    snapshotTypeName: null,
-                    canRead: false,
-                  };
-                }
-                return { ...ref, canRead: true };
-              } catch {
-                return {
-                  ...ref,
-                  snapshotTitle: null,
-                  snapshotTypeName: null,
-                  canRead: false,
-                };
-              }
-            }),
-          );
-          return { ...message, refs: refsWithAccess };
-        }
-        return message;
-      }),
+    const allObjectIds = Array.from(
+      new Set(
+        messages.flatMap((m) => (m.refs ?? []).map((r) => r.objectId)),
+      ),
     );
+    const accessMap = await this.objectsService.checkAccessBatch(allObjectIds, userId);
+
+    const messagesWithAccess = messages.map((message) => {
+      if (message.refs && message.refs.length > 0) {
+        const refsWithAccess = message.refs.map((ref) => {
+          const hasAccess = accessMap.get(ref.objectId) ?? false;
+          if (!hasAccess) {
+            return {
+              ...ref,
+              snapshotTitle: null,
+              snapshotTypeName: null,
+              canRead: false,
+            };
+          }
+          return { ...ref, canRead: true };
+        });
+        return { ...message, refs: refsWithAccess };
+      }
+      return message;
+    });
     return messagesWithAccess.map((m) => this.maskDeleted(m));
   }
 

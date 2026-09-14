@@ -12,11 +12,13 @@ import { ChannelRole, ChannelType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import type { EventsPublisher } from '../events/events-publisher.interface';
 import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
+import { ObjectsService } from '../objects/objects.service';
 @Injectable()
 export class ChannelsService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(EVENTS_PUBLISHER) private readonly eventsPublisher: EventsPublisher,
+    private readonly objectsService: ObjectsService,
   ) {}
   private validateCreateChannel(dto: CreateChannelDto) {
     if (dto.type === ChannelType.direct) {
@@ -137,6 +139,23 @@ export class ChannelsService {
     return channel;
   }
 
+  private async resolveContextTitle(
+    objectId: string,
+    userId: string,
+    explicitTitle?: string,
+  ): Promise<string> {
+    if (explicitTitle) return explicitTitle;
+    try {
+      const resolved = await this.objectsService.resolveObjects([objectId], userId);
+      const obj = resolved.get(objectId);
+      if (obj?.exists && obj.canRead && obj.title) {
+        return obj.title;
+      }
+    } catch {
+    }
+    return 'Обсуждение объекта';
+  }
+
   async createContext(dto: CreateChannelDto, currentUserId: string) {
     try {
       const existing = await this.prisma.channels.findFirst({
@@ -151,6 +170,7 @@ export class ChannelsService {
         const isMember = existing.members.some(
           (m) => m.userId === currentUserId,
         );
+        const wasArchived = existing.archivedAt !== null;
         if (!isMember) {
           await this.prisma.channelMembers.create({
             data: {
@@ -161,19 +181,22 @@ export class ChannelsService {
           });
           this.eventsPublisher.joinRoom(currentUserId, existing.id);
         }
+        if (wasArchived) {
+          await this.prisma.channels.update({
+            where: { id: existing.id },
+            data: { archivedAt: null },
+          });
+        }
         const updatedChannel = await this.prisma.channels.findUnique({
           where: { id: existing.id },
           include: { members: { include: { user: true } } },
         });
-        if (updatedChannel) {
+        if (updatedChannel && (!isMember || wasArchived)) {
           for (const member of updatedChannel.members) {
             this.eventsPublisher.publishToUser(
               member.userId,
               'members.updated',
-              {
-                channelId: updatedChannel.id,
-                members: updatedChannel.members,
-              },
+              { channelId: existing.id, members: updatedChannel.members },
             );
             this.eventsPublisher.publishToUser(
               member.userId,
@@ -181,15 +204,25 @@ export class ChannelsService {
               updatedChannel,
             );
           }
+          this.eventsPublisher.publishToUser(
+            currentUserId,
+            'channel.created',
+            updatedChannel,
+          );
         }
         return updatedChannel || existing;
       }
 
       const memberIds = Array.from(new Set([currentUserId, ...dto.members]));
+      const resolvedTitle = await this.resolveContextTitle(
+        dto.contextObjectId!,
+        currentUserId,
+        dto.title,
+      );
       const newChannel = await this.prisma.channels.create({
         data: {
           type: ChannelType.context,
-          title: dto.title!,
+          title: resolvedTitle,
           contextObjectId: dto.contextObjectId,
           createdBy: currentUserId,
           members: {
@@ -234,36 +267,7 @@ export class ChannelsService {
             (m) => m.userId === currentUserId,
           );
           if (!isMember) {
-            await this.prisma.channelMembers.create({
-              data: {
-                channelId: existing.id,
-                userId: currentUserId,
-                role: ChannelRole.member,
-              },
-            });
-            this.eventsPublisher.joinRoom(currentUserId, existing.id);
-            const updatedChannel = await this.prisma.channels.findUnique({
-              where: { id: existing.id },
-              include: { members: { include: { user: true } } },
-            });
-            if (updatedChannel) {
-              for (const member of updatedChannel.members) {
-                this.eventsPublisher.publishToUser(
-                  member.userId,
-                  'members.updated',
-                  {
-                    channelId: updatedChannel.id,
-                    members: updatedChannel.members,
-                  },
-                );
-                this.eventsPublisher.publishToUser(
-                  member.userId,
-                  'channel.updated',
-                  updatedChannel,
-                );
-              }
-              return updatedChannel;
-            }
+            throw new ForbiddenException('not a member of this context channel');
           }
           return existing;
         }
@@ -287,6 +291,7 @@ export class ChannelsService {
   async findUserChannels(currentUserId: string) {
     const channels = await this.prisma.channels.findMany({
       where: {
+        archivedAt: null,
         members: { some: { userId: currentUserId } },
       },
       include: {
@@ -495,24 +500,25 @@ export class ChannelsService {
     if (!membership) {
       throw new ForbiddenException('not a member of this channel');
     }
-    if (membership.role !== ChannelRole.owner) {
-      throw new ForbiddenException('only the owner can delete the channel');
-    }
     const channel = await this.prisma.channels.findUnique({
       where: { id: channelId },
       include: { members: true },
     });
+    if (!channel) {
+      throw new NotFoundException('channel not found');
+    }
+    if (channel.type !== ChannelType.direct && membership.role !== ChannelRole.owner) {
+      throw new ForbiddenException('only the owner can delete the channel');
+    }
     await this.prisma.channels.update({
       where: { id: channelId },
       data: { archivedAt: new Date() },
     });
 
-    if (channel) {
-      for (const member of channel.members) {
-        this.eventsPublisher.publishToUser(member.userId, 'channel.deleted', {
-          channelId,
-        });
-      }
+    for (const member of channel.members) {
+      this.eventsPublisher.publishToUser(member.userId, 'channel.deleted', {
+        channelId,
+      });
     }
     return { ok: true };
   }
@@ -529,19 +535,14 @@ export class ChannelsService {
     }
 
     const isSelfLeaving = requesterId === targetUserId;
-    if (isSelfLeaving && requesterMembership.role === ChannelRole.owner) {
+    if (isSelfLeaving) {
       const otherMembers = await this.prisma.channelMembers.findMany({
         where: { channelId, userId: { not: targetUserId } },
       });
-      if (otherMembers.length > 0) {
-        const newOwner = otherMembers[0];
-        await this.prisma.channelMembers.update({
-          where: {
-            channelId_userId: { channelId, userId: newOwner.userId },
-          },
-          data: { role: ChannelRole.owner },
+      if (otherMembers.length === 0) {
+        await this.prisma.channelMembers.delete({
+          where: { channelId_userId: { channelId, userId: targetUserId } },
         });
-      } else {
         await this.prisma.channels.update({
           where: { id: channelId },
           data: { archivedAt: new Date() },
@@ -550,6 +551,15 @@ export class ChannelsService {
           channelId,
         });
         return { ok: true };
+      }
+      if (requesterMembership.role === ChannelRole.owner) {
+        const newOwner = otherMembers[0];
+        await this.prisma.channelMembers.update({
+          where: {
+            channelId_userId: { channelId, userId: newOwner.userId },
+          },
+          data: { role: ChannelRole.owner },
+        });
       }
     }
     if (!isSelfLeaving && requesterMembership.role !== ChannelRole.owner) {
