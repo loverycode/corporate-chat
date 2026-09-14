@@ -10,7 +10,8 @@
     "node_modules/(?!(file-type|strtok3|peek-readable|token-types|@borewit|@tokenizer|uint8array-extras)/)"
   ],
   "moduleNameMapper": {
-    "^src/(.*)$": "<rootDir>/../src/$1"
+    "^src/(.*)$": "<rootDir>/../src/$1",
+    "^@nestjs/schedule$": "<rootDir>/__mocks__/@nestjs/schedule.ts"
   },
   "globalSetup": "<rootDir>/global-setup.ts"
 }

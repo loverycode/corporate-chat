@@ -19,6 +19,12 @@ jest.mock('sharp', () => ({
     toBuffer: jest.fn().mockResolvedValue(Buffer.from('fake-thumbnail')),
   })),
 }));
+jest.mock('@nestjs/schedule', () => ({
+  Cron: () => () => {},
+  CronExpression: {
+    EVERY_HOUR: '0 0-23/1 * * *',
+  },
+}));
 import { fileTypeFromBuffer } from 'file-type';
 const fileTypeMock = fileTypeFromBuffer as jest.Mock;
 
@@ -436,8 +442,8 @@ describe('AttachmentsService', () => {
         message: { channelId: 'channel-1' },
       };
 
-      prisma.attachments.findUnique.mockResolvedValueOnce(mockAttachment);
-      prisma.channelMembers.findUnique.mockResolvedValueOnce(null);
+      prisma.attachments.findUnique.mockResolvedValue(mockAttachment);
+      prisma.channelMembers.findUnique.mockResolvedValue(null);
 
       await expect(service.getDownloadFile('att-1', 'user-2')).rejects.toThrow(
         ForbiddenException,
@@ -450,7 +456,7 @@ describe('AttachmentsService', () => {
     });
 
     it('выбрасывает ошибку NotFoundException, если вложение не найдено', async () => {
-      prisma.attachments.findUnique.mockResolvedValueOnce(null);
+      prisma.attachments.findUnique.mockResolvedValue(null);
 
       await expect(
         service.getDownloadFile('missing', 'user-1'),

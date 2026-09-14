@@ -34,7 +34,9 @@ describe('MessagesService', () => {
     };
     objectsService = {
       extractObjectIds: jest.fn().mockReturnValue([]),
-      resolveObjects: jest.fn(),
+      resolveObjects: jest.fn().mockResolvedValue(new Map()),
+      checkAccessBatch: jest.fn().mockResolvedValue(new Map()),  
+      checkAccess: jest.fn().mockResolvedValue(true),              
     };
     eventsPublisher = {
       publishToUser: jest.fn(),

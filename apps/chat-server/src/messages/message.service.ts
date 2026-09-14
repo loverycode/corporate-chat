@@ -208,7 +208,7 @@ export class MessagesService {
     const otherMembers = await this.prisma.channelMembers.findMany({
       where: { channelId, userId: { not: authorId } },
       select: { userId: true },
-    });
+    }) ?? [];
 
     await Promise.all(
       otherMembers.map(async ({ userId }) => {

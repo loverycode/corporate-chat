@@ -9,7 +9,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { MessagesGateway } from '../messages/messages.gateway';
 import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
-
+import { ObjectsService } from '../objects/objects.service';
 describe('ChannelsService', () => {
   let service: ChannelsService;
   let prisma: {
@@ -35,12 +35,13 @@ describe('ChannelsService', () => {
   };
   let gateway: any;
   let eventsPublisher: any;
+  let objectsService: any;
 
   beforeEach(async () => {
     prisma = {
       channels: {
         findFirst: jest.fn(),
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -74,6 +75,12 @@ describe('ChannelsService', () => {
       joinRoom: jest.fn(),
       leaveRoom: jest.fn(),
     };
+    objectsService = {
+        resolveObjects: jest.fn().mockResolvedValue(new Map()),
+        checkAccess: jest.fn().mockResolvedValue(true),
+        checkAccessBatch: jest.fn().mockResolvedValue(new Map()),
+        extractObjectIds: jest.fn().mockReturnValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -81,6 +88,7 @@ describe('ChannelsService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: MessagesGateway, useValue: gateway },
         { provide: EVENTS_PUBLISHER, useValue: eventsPublisher },
+        { provide: ObjectsService, useValue: objectsService }, 
       ],
     }).compile();
 

@@ -149,7 +149,7 @@ export class AttachmentsService {
       include: { message: { select: { channelId: true } } },
     });
     if (!attachment) {
-      throw new BadRequestException('attachment not found');
+      throw new NotFoundException('attachment not found');
     }
     if (attachment.message && attachment.message.channelId) {
       await this.assertChannelMember(userId, attachment.message.channelId);
