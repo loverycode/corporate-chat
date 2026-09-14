@@ -116,4 +116,5 @@ export const api = {
     updateChannel: (channelId: string, data: { title?: string; description?: string }) => request<Channel>(`/channels/${channelId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     addChannelMembers: (channelId: string, userIds: string[]) => request<Channel>(`/channels/${channelId}/members`, { method: 'POST', body: JSON.stringify({ userIds }) }),
     removeChannelMember: (channelId: string, userId: string) => request<{ ok: boolean }>(`/channels/${channelId}/members/${userId}`, { method: 'DELETE' }),
+    deleteChannel: (channelId: string) => request<{ ok: boolean }>(`/channels/${channelId}`, { method: 'DELETE' }),
 }

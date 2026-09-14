@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Box, List, ListItemButton, ListItemText, Typography, CircularProgress, Badge, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Tabs, Tab, Checkbox, Divider } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import SearchIcon from '@mui/icons-material/Search';
@@ -22,11 +22,18 @@ export function ChannelList({ currentUser, selectedChannelId, onSelectChannel, r
     const [searchOpen, setSearchOpen] = useState(false);
     const [groupDescription, setGroupDescription] = useState('');
     const { t } = useTranslation();
+    const loadSeqRef = useRef(0);
 
     function loadChannels() {
-        api.getChannels().then((data)=>
-            setChannels(data)).
-        catch((err) => setError(err.message)); }
+        const seq = ++loadSeqRef.current;
+        api.getChannels().then((data) => {
+            if (seq !== loadSeqRef.current) return; 
+            setChannels(data);
+        }).catch((err) => {
+            if (seq !== loadSeqRef.current) return;
+            setError(err.message);
+        });
+    }
 
     useEffect(() => { 
         loadChannels();
@@ -38,6 +45,9 @@ export function ChannelList({ currentUser, selectedChannelId, onSelectChannel, r
         let pollId: ReturnType<typeof setInterval> | undefined;
 
         function handleMemberRemoved() { loadChannels(); }
+        function handleChannelDeleted(payload: { channelId: string }) {
+            setChannels((prev) => prev ? prev.filter((ch) => ch.id !== payload.channelId) : prev);
+        }
         function handleNewMessage(msg: Message) {
             setChannels((prev) => {
                 if (!prev) return prev;
@@ -55,6 +65,7 @@ export function ChannelList({ currentUser, selectedChannelId, onSelectChannel, r
 
         function attach(s: NonNullable<ReturnType<typeof getSocket>>) {
             s.on('member.removed', handleMemberRemoved);
+            s.on('channel.deleted', handleChannelDeleted);
             s.on('message.created', handleNewMessage);
             s.on('unread.changed', handleUnreadChanged);
         }
@@ -76,6 +87,7 @@ export function ChannelList({ currentUser, selectedChannelId, onSelectChannel, r
             if (pollId) clearInterval(pollId);
             if (socket) {
                 socket.off('member.removed', handleMemberRemoved);
+                socket.off('channel.deleted', handleChannelDeleted);
                 socket.off('message.created', handleNewMessage);
                 socket.off('unread.changed', handleUnreadChanged);
             }

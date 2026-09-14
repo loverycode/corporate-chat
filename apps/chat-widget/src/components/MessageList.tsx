@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Box, Typography, CircularProgress, Button, Stack, Paper, Menu, MenuItem, ListItemIcon, ListItemText, Divider, Popover, Chip, IconButton, Dialog, DialogContent } from '@mui/material';
+import { Box, Typography, CircularProgress, Button, Stack, Paper, Menu, MenuItem, ListItemIcon, ListItemText, Divider, Popover, Chip, IconButton, Dialog,  DialogTitle, DialogActions, DialogContentText, DialogContent } from '@mui/material';
 import type { Channel, ChannelMember, Message, Reaction, Attachment } from '../api/types';
 import { api } from '../api/client';
 import { getSocket } from '../api/socket';
@@ -90,6 +90,7 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
     
     const [messages, setMessages] = useState<Message[] | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [retryTrigger, setRetryTrigger] = useState(0);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [members, setMembers] = useState<ChannelMember[]>([]);
@@ -101,6 +102,8 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
     const [channelType, setChannelType] = useState<string>('');
     const loadingRef = useRef<{ channelId: string; timestamp: number }>({ channelId: '', timestamp: 0 });
     const [groupSettingsOpen, setGroupSettingsOpen] = useState(false);
+    const [directMenuAnchor, setDirectMenuAnchor] = useState<HTMLElement | null>(null);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const simpleMembers = members.map((m) => ({ userId: m.userId, name: m.user?.name || m.userId }));
     const mentionedMembers = simpleMembers.filter((m) => m.userId !== currentUserId);
     const [editingMessage, setEditingMessage] = useState<{ id: string; bodyMd: string } | null>(null);
@@ -124,21 +127,28 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
         let cancelled = false;
         const currentChannelId = channelId;
         loadingRef.current = { channelId: currentChannelId, timestamp: Date.now() };
+        setError(null);
         const loadAllData = async () => {
-            const channel = await api.getChannel(currentChannelId);
-            if (cancelled || loadingRef.current.channelId !== currentChannelId) return;
-            setChannel(channel);
-            setChannelType(channel.type);
-            setMemberCount(channel.members?.length || 0);
-            setChannelTitle(getChannelTitle(channel, currentUserId));
-            setMembers(channel.members || []);
-            const own = channel.members?.find((m: ChannelMember) => m.userId === currentUserId);
-            lastReadIdRef.current = own?.lastReadMessageId ?? null;
+            try {
+                const channel = await api.getChannel(currentChannelId);
+                if (cancelled || loadingRef.current.channelId !== currentChannelId) return;
+                setChannel(channel);
+                setChannelType(channel.type);
+                setMemberCount(channel.members?.length || 0);
+                setChannelTitle(getChannelTitle(channel, currentUserId));
+                setMembers(channel.members || []);
+                const own = channel.members?.find((m: ChannelMember) => m.userId === currentUserId);
+                lastReadIdRef.current = own?.lastReadMessageId ?? null;
 
-            const messagesData = await api.getMessages(currentChannelId);
-            if (cancelled || loadingRef.current.channelId !== currentChannelId) return;
-            setMessages(messagesData);
-            setHasMore(messagesData.length >= 30);
+                const messagesData = await api.getMessages(currentChannelId);
+                if (cancelled || loadingRef.current.channelId !== currentChannelId) return;
+                setMessages(messagesData);
+                setHasMore(messagesData.length >= 30);
+            } catch (err) {
+                if (cancelled || loadingRef.current.channelId !== currentChannelId) return;
+                console.error('Failed to load channel data:', err);
+                setError(err instanceof Error ? err.message : 'Failed to load channel');
+            }
         };
 
         loadAllData();
@@ -146,11 +156,12 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
         return () => {
             cancelled = true;
         };
-    }, [channelId, currentUserId]);
+    }, [channelId, currentUserId, retryTrigger]);
 
     useEffect(() => {
-        const socket = getSocket();
-        if (!socket) return;
+        let socket = getSocket();
+        let cancelled = false;
+        let pollId: ReturnType<typeof setInterval> | undefined;
 
         function handleNewMessage(msg: Message) {
             if (msg.channelId !== channelId) return;
@@ -189,24 +200,50 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                 setMembers(channel.members);
             }
         }
+        function handleChannelDeleted(data: { channelId: string }) {
+            if (data.channelId !== channelId) return;
+            onBack?.();
+        }
 
-        socket.on('message.created', handleNewMessage);
-        socket.on('message.updated', handleUpdated);
-        socket.on('message.deleted', handleDeleted);
-        socket.on('reaction.changed', handleReactionChanged);
-        socket.on('channel.updated', handleChannelUpdated);
+        function attach(s: NonNullable<ReturnType<typeof getSocket>>) {
+            s.on('message.created', handleNewMessage);
+            s.on('message.updated', handleUpdated);
+            s.on('message.deleted', handleDeleted);
+            s.on('reaction.changed', handleReactionChanged);
+            s.on('channel.updated', handleChannelUpdated);
+            s.on('channel.deleted', handleChannelDeleted);
+        }
+
+        if (socket) {
+            attach(socket);
+        } else {
+            pollId = setInterval(() => {
+                socket = getSocket();
+                if (socket) {
+                    clearInterval(pollId);
+                    if (!cancelled) attach(socket);
+                }
+            }, 200);
+        }
+
         return () => {
-            socket.off('message.created', handleNewMessage);
-            socket.off('message.updated', handleUpdated);
-            socket.off('message.deleted', handleDeleted);
-            socket.off('reaction.changed', handleReactionChanged);
-            socket.off('channel.updated', handleChannelUpdated);
+            cancelled = true;
+            if (pollId) clearInterval(pollId);
+            if (socket) {
+                socket.off('message.created', handleNewMessage);
+                socket.off('message.updated', handleUpdated);
+                socket.off('message.deleted', handleDeleted);
+                socket.off('reaction.changed', handleReactionChanged);
+                socket.off('channel.updated', handleChannelUpdated);
+                socket.off('channel.deleted', handleChannelDeleted);
+            }
         };
     }, [channelId, currentUserId]);
 
     useEffect(() => {
-        const socket = getSocket();
-        if (!socket) return;
+        let socket = getSocket();
+        let cancelled = false;
+        let pollId: ReturnType<typeof setInterval> | undefined;
 
         function handleTyping(data: { channelId: string; userId: string }) {
             if (data.channelId !== channelId) return;
@@ -226,8 +263,23 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
             );
         }
 
-        socket.on('typing', handleTyping);
-        return () => { socket.off('typing', handleTyping); };
+        if (socket) {
+            socket.on('typing', handleTyping);
+        } else {
+            pollId = setInterval(() => {
+                socket = getSocket();
+                if (socket) {
+                    clearInterval(pollId);
+                    if (!cancelled) socket.on('typing', handleTyping);
+                }
+            }, 200);
+        }
+
+        return () => {
+            cancelled = true;
+            if (pollId) clearInterval(pollId);
+            if (socket) socket.off('typing', handleTyping);
+        };
     }, [channelId]);
 
     const latestMessageId = messages?.[0]?.id;
@@ -270,8 +322,9 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
     }, [targetMessageId]);
 
      useEffect(() => {
-        const socket = getSocket();
-        if (!socket) return;
+        let socket = getSocket();
+        let cancelled = false;
+        let pollId: ReturnType<typeof setInterval> | undefined;
 
         function handleReconnect(){
             api.getMessages(channelId).then((data)=>{
@@ -283,9 +336,30 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                 });
             }).catch(()=>{});
         }
-        socket.on('connect', handleReconnect);
-            return () => { socket.off('connect', handleReconnect); };
+
+        if (socket) {
+            socket.on('connect', handleReconnect);
+        } else {
+            pollId = setInterval(() => {
+                socket = getSocket();
+                if (socket) {
+                    clearInterval(pollId);
+                    if (!cancelled) socket.on('connect', handleReconnect);
+                }
+            }, 200);
+        }
+
+        return () => {
+            cancelled = true;
+            if (pollId) clearInterval(pollId);
+            if (socket) socket.off('connect', handleReconnect);
+        };
         }, [channelId]);
+        
+    useEffect(() => {
+        setDirectMenuAnchor(null);
+        setDeleteDialogOpen(false);
+     }, [channelId]);
 
     async function handleLoadMore() {
         if (!messages || messages.length === 0) return;
@@ -421,9 +495,14 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
         const otherMember = members.find((m) => m.userId !== currentUserId);
         return otherMember ?  onlineUserIds.has(otherMember.userId) : false;
     }
-    function openGroupSettings() {
-        if (channel?.type==='group'){
-            setGroupSettingsOpen(true);
+    
+    async function handleDeleteDirectChannel() {
+        try {
+            await api.deleteChannel(channelId);
+            setDeleteDialogOpen(false);
+            setDirectMenuAnchor(null);
+        } catch (err) {
+            console.error('Не удалось удалить чат', err);
         }
     }
     async function openAttachment(att: Attachment) {
@@ -476,7 +555,7 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                                 {isOnline() ? t('online') : t('offline')}
                             </Typography>
                         )}
-                        {channelType === 'group' && typingUsers.size===0 && (
+                        {(channelType === 'group' || channelType ==='context') && typingUsers.size===0 && (
                             <Typography variant="caption" color="text.secondary">
                                 {memberCount} {t('participants')}
                             </Typography>
@@ -488,14 +567,27 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                         )}
                 </Box>
             </Box>
-            {channelType === 'group' && (
-                <IconButton size="small" onClick={openGroupSettings}>
+            {(channelType === 'group' || channelType ==='context') && (
+                <IconButton size="small" onClick={() => setGroupSettingsOpen(true)}>
+                    <MoreVertIcon fontSize="small" />
+                </IconButton>
+            )}
+            {channelType === 'direct' && (
+                <IconButton size="small" onClick={(e) => setDirectMenuAnchor(e.currentTarget)}>
                     <MoreVertIcon fontSize="small" />
                 </IconButton>
             )}
             </Box>
             <Box sx={{ flex: 1, minWidth:0, overflow: 'auto', p:{xs:1, sm:2 },}}>
-                {error && <Typography color="error">{error}</Typography>}
+                {error && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography color="error">{error}</Typography>
+                        {/* TODO: заменить литерал на t('retry'), когда ключ появится в TranslationKey */}
+                        <Button size="small" onClick={() => setRetryTrigger((v) => v + 1)}>
+                            Повторить
+                        </Button>
+                    </Box>
+                )}
                 {!messages && !error && <CircularProgress size={24} />}
                 {messages && (
                     <Stack spacing={1} sx={{ flexDirection: 'column-reverse' }}>
@@ -583,7 +675,7 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                                                 {members.find((m) => m.userId === msg.authorId && m.userId!==currentUserId)?.user?.name || ''}                                            
                                             </Typography>
                                             <Typography variant="body2" component="div">
-                                                {renderMessageBody(msg.bodyMd, msg.refs || [], mentionedMembers, t as any)}
+                                                {renderMessageBody(msg.bodyMd, msg.refs || [], simpleMembers, t as any)}
                                             </Typography>
                                             <Typography variant="caption" sx={{ opacity: 0.7, mt: 0.5, display:'flex', justifyContent:'flex-end' }}>
                                                 {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -662,6 +754,31 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                             </>
                     )}
                 </Menu>
+                <Menu
+                    open={Boolean(directMenuAnchor)}
+                    anchorEl={directMenuAnchor}
+                    onClose={() => setDirectMenuAnchor(null)}
+                >
+                    <MenuItem onClick={() => { setDirectMenuAnchor(null); setDeleteDialogOpen(true); }}>
+                        <ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>
+                        <ListItemText>{t('delete')}</ListItemText>
+                    </MenuItem>
+                </Menu>
+
+                <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+                    <DialogTitle>{t('delete')}</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>
+                            {t('deleteDirectChatConfirm')}
+                        </DialogContentText>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={() => setDeleteDialogOpen(false)}>{t('cancel')}</Button>
+                        <Button color="error" variant="contained" onClick={handleDeleteDirectChannel}>
+                            {t('delete')}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
                 <Popover
                     open={Boolean(reactionPickerAnchor)}
                     anchorEl={reactionPickerAnchor?.el}
@@ -711,22 +828,23 @@ export function MessageList({ channelId, currentUserId, targetMessageId, onTarge
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
             />
-            <GroupSettings
-                open={groupSettingsOpen}
-                channel={channel}
-                currentUserId={currentUserId}
-                onClose={() => {
-                    setGroupSettingsOpen(false)
-                }}
-                onUpdated={() => {
-                    
-                }}
-                onLeave={()=>{
-                    
-                    setGroupSettingsOpen(false);
-                    onBack?.();
-                }}
-            />
+            {(channelType === 'group' || channelType === 'context') && (
+                <GroupSettings
+                    open={groupSettingsOpen}
+                    channel={channel}
+                    currentUserId={currentUserId}
+                    onClose={() => {
+                        setGroupSettingsOpen(false)
+                    }}
+                    onUpdated={() => {
+                        
+                    }}
+                    onLeave={()=>{
+                        setGroupSettingsOpen(false);
+                        onBack?.();
+                    }}
+                />
+                )}
         </Box>
     );
 }

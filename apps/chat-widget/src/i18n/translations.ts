@@ -50,6 +50,7 @@ export const translations = {
         attachmentImage: 'Изображение',
         attachmentFile: 'Файл',
         attachmentsCount: '{count} файлов',
+        deleteDirectChatConfirm: 'Удалить чат для обоих участников? Это действие необратимо.',
     },
     en: {
         writeMessage: 'Write a message...',
@@ -102,6 +103,7 @@ export const translations = {
         attachmentImage: 'Image',
         attachmentFile: 'File',
         attachmentsCount: '{count} files',
+        deleteDirectChatConfirm: 'deleteDirectChatConfirm',
     },
 } as const;
 
