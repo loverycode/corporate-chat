@@ -146,12 +146,16 @@ export class ChannelsService {
   ): Promise<string> {
     if (explicitTitle) return explicitTitle;
     try {
-      const resolved = await this.objectsService.resolveObjects([objectId], userId);
+      const resolved = await this.objectsService.resolveObjects(
+        [objectId],
+        userId,
+      );
       const obj = resolved.get(objectId);
       if (obj?.exists && obj.canRead && obj.title) {
         return obj.title;
       }
     } catch {
+      // ошибка резолва не критична — используем дефолтный заголовок
     }
     return 'Обсуждение объекта';
   }
@@ -267,7 +271,9 @@ export class ChannelsService {
             (m) => m.userId === currentUserId,
           );
           if (!isMember) {
-            throw new ForbiddenException('not a member of this context channel');
+            throw new ForbiddenException(
+              'not a member of this context channel',
+            );
           }
           return existing;
         }
@@ -507,7 +513,10 @@ export class ChannelsService {
     if (!channel) {
       throw new NotFoundException('channel not found');
     }
-    if (channel.type !== ChannelType.direct && membership.role !== ChannelRole.owner) {
+    if (
+      channel.type !== ChannelType.direct &&
+      membership.role !== ChannelRole.owner
+    ) {
       throw new ForbiddenException('only the owner can delete the channel');
     }
     await this.prisma.channels.update({
