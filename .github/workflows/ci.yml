@@ -60,7 +60,24 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/corporate_chat_test?schema=public
           CHAT_JWT_SECRET: test-secret-for-ci
-
+      - name: Start MinIO
+        run: |
+          docker run -d --name minio \
+            -p 9000:9000 -p 9001:9001 \
+            -e MINIO_ROOT_USER=admin \
+            -e MINIO_ROOT_PASSWORD=password \
+            minio/minio server /data --console-address ":9001"
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              echo "MinIO is ready"
+              exit 0
+            fi
+            echo "Waiting for MinIO... ($i)"
+            sleep 1
+          done
+          echo "MinIO did not start in time"
+          docker logs minio
+          exit 1
       - name: E2E tests
         run: npm run test:e2e
         env:

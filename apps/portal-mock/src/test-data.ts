@@ -17,11 +17,6 @@ export const TEST_OBJECTS: Record<string, { title: string; typeName: string; ico
         typeName: 'Задача',
         icon: 'Assignment',
     },
-    'a1000000-0000-4000-8000-000000000003': {
-        title: 'Проект КП-456',
-        typeName: 'Проект',
-        icon: 'Apartment',
-    },
 };
 
 export const OBJECT_ACCESS: Record<string, string[]> = {
