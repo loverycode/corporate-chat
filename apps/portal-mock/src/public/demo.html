@@ -19,8 +19,11 @@
         <h3>Портал (заглушка)</h3>
         <p>Пользователь: <span id="user-select"></span></p>
         <select id="userSelect">
-            <option value="b4bf0b67-6b40-4035-8ee7-0a8f0984ac99">Тест Тестов</option>
-            <option value="21be610f-8ec5-4225-8880-a80d7029c2ea">Второй Пользователь</option>
+            <option value="b4bf0b67-6b40-4035-8ee7-0a8f0984ac99">Юрий Тестировщик</option>
+            <option value="21be610f-8ec5-4225-8880-a80d7029c2ea">Андрей Проджект</option>
+            <option value="c3d4e5f6-1a2b-4c3d-9e4f-5a6b7c8d9e0f">Мария Иванова</option>
+            <option value="d4e5f6a7-2b3c-4d4e-8f5a-6b7c8d9e0f1a">Дмитрий Петров</option>
+            <option value="e5f6a7b8-3c4d-4e5f-9a6b-7c8d9e0f1a2b">Анна Смирнова</option>
         </select>
         <p>Непрочитано: <span id="unread-badge">0</span></p>
     </div>
@@ -37,6 +40,13 @@
     <script>
         const CHAT_ORIGIN = 'http://localhost:5173';
         const PORTAL_API = 'http://localhost:3001';
+        const USERS = {
+            'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Юрий Тестировщик',
+            '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Андрей Проджект',
+            'c3d4e5f6-1a2b-4c3d-9e4f-5a6b7c8d9e0f': 'Мария Иванова',
+            'd4e5f6a7-2b3c-4d4e-8f5a-6b7c8d9e0f1a': 'Дмитрий Петров',
+            'e5f6a7b8-3c4d-4e5f-9a6b-7c8d9e0f1a2b': 'Анна Смирнова',
+        };
         const frame = document.getElementById('chatFrame');
         const logEl = document.getElementById('log');
         const userSelect = document.getElementById('userSelect');
@@ -56,13 +66,9 @@
             const userId = userSelect.value;
             const res = await fetch(`${PORTAL_API}/auth/token/${userId}`);
             const { token } = await res.json();
-            const users = {
-                'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Тест Тестов',
-                '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Второй Пользователь'
-            };
             if (isWidgetReady) {
                 frame.contentWindow.postMessage({ type: 'portal:auth', token }, CHAT_ORIGIN);
-                log(`Токен отправлен для ${users[userId]}`);
+                log(`Токен отправлен для ${USERS[userId]}`);
                 sendThemeAndLocale();
             } else {
                 pendingToken = token;
@@ -108,12 +114,8 @@
                 isWidgetReady = true;
                 log('Получено chat:ready');
                 if (pendingToken) {
-                    const users = {
-                        'b4bf0b67-6b40-4035-8ee7-0a8f0984ac99': 'Тест Тестов',
-                        '21be610f-8ec5-4225-8880-a80d7029c2ea': 'Второй Пользователь'
-                    };
                     frame.contentWindow.postMessage({ type: 'portal:auth', token: pendingToken }, CHAT_ORIGIN);
-                    log(`Токен отправлен для ${users[userSelect.value]}`);
+                    log(`Токен отправлен для ${USERS[userSelect.value]}`);
                     sendThemeAndLocale();
                     pendingToken = null;
                 }
