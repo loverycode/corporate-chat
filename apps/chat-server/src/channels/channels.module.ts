@@ -6,9 +6,9 @@ import { UnreadController } from './unread.controller';
 import { MessagesModule } from '../messages/messages.module';
 import { EVENTS_PUBLISHER } from '../events/events-publisher.interface';
 import { MessagesGateway } from '../messages/messages.gateway';
-import { ObjectsModule } from '../objects/objects.module'; 
+import { ObjectsModule } from '../objects/objects.module';
 @Module({
-  imports: [ObjectsModule,PrismaModule, MessagesModule],
+  imports: [ObjectsModule, PrismaModule, MessagesModule],
   controllers: [ChannelsController, UnreadController, PresenceController],
   providers: [
     ChannelsService,

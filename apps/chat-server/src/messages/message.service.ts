@@ -1,6 +1,11 @@
-import {PrismaService} from '../prisma/prisma.service';
-import {CreateMessageDto} from './create-message.dto';
-import {ForbiddenException, Injectable, NotFoundException, BadRequestException} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateMessageDto } from './create-message.dto';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { MessagesGateway } from './messages.gateway';
 import { ObjectsService } from '../objects/objects.service';
 import { UpdateMessageDto } from './update-message.dto';
@@ -119,7 +124,9 @@ export class MessagesService {
       });
 
       if (attachments.length !== dto.attachmentIds.length) {
-        throw new BadRequestException('Some attachments are invalid or from other channels');
+        throw new BadRequestException(
+          'Some attachments are invalid or from other channels',
+        );
       }
       await this.prisma.attachments.updateMany({
         where: {
@@ -144,8 +151,15 @@ export class MessagesService {
       },
     });
 
-    if (messageWithRelations && messageWithRelations.refs && messageWithRelations.refs.length > 0) {
-      await this.emitMessageCreatedWithPerViewerAccess(channelId, messageWithRelations);
+    if (
+      messageWithRelations &&
+      messageWithRelations.refs &&
+      messageWithRelations.refs.length > 0
+    ) {
+      await this.emitMessageCreatedWithPerViewerAccess(
+        channelId,
+        messageWithRelations,
+      );
     } else {
       this.gateway.emitMessageCreated(channelId, messageWithRelations);
     }
@@ -166,15 +180,26 @@ export class MessagesService {
 
     await Promise.all(
       members.map(async ({ userId }) => {
-        const accessMap = await this.objectsService.checkAccessBatch(objectIds, userId);
+        const accessMap = await this.objectsService.checkAccessBatch(
+          objectIds,
+          userId,
+        );
         const refsForViewer = message.refs.map((ref: any) => {
           const hasAccess = accessMap.get(ref.objectId) ?? false;
           if (!hasAccess) {
-            return { ...ref, snapshotTitle: null, snapshotTypeName: null, canRead: false };
+            return {
+              ...ref,
+              snapshotTitle: null,
+              snapshotTypeName: null,
+              canRead: false,
+            };
           }
           return { ...ref, canRead: true };
         });
-        this.gateway.emitToUser(userId, 'message.created', { ...message, refs: refsForViewer });
+        this.gateway.emitToUser(userId, 'message.created', {
+          ...message,
+          refs: refsForViewer,
+        });
       }),
     );
   }
@@ -216,7 +241,12 @@ export class MessagesService {
           }
         }
 
-        this.gateway.emitUnreadChanged(userId, total, channelId, countForChannel);
+        this.gateway.emitUnreadChanged(
+          userId,
+          total,
+          channelId,
+          countForChannel,
+        );
       }),
     );
   }
@@ -266,7 +296,12 @@ export class MessagesService {
     return { ok: true };
   }
 
-  async findHistory(channelId: string, userId: string, cursor?: string, limit = 30) {
+  async findHistory(
+    channelId: string,
+    userId: string,
+    cursor?: string,
+    limit = 30,
+  ) {
     await this.assertMember(channelId, userId);
     const messages = await this.prisma.messages.findMany({
       where: { channelId },
@@ -284,11 +319,12 @@ export class MessagesService {
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     });
     const allObjectIds = Array.from(
-      new Set(
-        messages.flatMap((m) => (m.refs ?? []).map((r) => r.objectId)),
-      ),
+      new Set(messages.flatMap((m) => (m.refs ?? []).map((r) => r.objectId))),
     );
-    const accessMap = await this.objectsService.checkAccessBatch(allObjectIds, userId);
+    const accessMap = await this.objectsService.checkAccessBatch(
+      allObjectIds,
+      userId,
+    );
 
     const messagesWithAccess = messages.map((message) => {
       if (message.refs && message.refs.length > 0) {

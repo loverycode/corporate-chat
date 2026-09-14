@@ -1,5 +1,12 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { S3Client, PutObjectCommand, GetObjectCommand, CreateBucketCommand, HeadBucketCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  CreateBucketCommand,
+  HeadBucketCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const BUCKET = 'chat-files';

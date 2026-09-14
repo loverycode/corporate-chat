@@ -128,24 +128,51 @@ export class MessagesGateway
       .emit('typing', { channelId: data.channelId, userId });
   }
   emitMessageCreated(channelId: string, message: unknown) {
-    this.eventsPublisher.publishToChannel(channelId, 'message.created', message);
+    this.eventsPublisher.publishToChannel(
+      channelId,
+      'message.created',
+      message,
+    );
   }
-  emitUnreadChanged(userId: string, total: number, channelId: string, count: number,) {
-    this.eventsPublisher.publishToUser(userId, 'unread.changed', {channelId, total, count});
+  emitUnreadChanged(
+    userId: string,
+    total: number,
+    channelId: string,
+    count: number,
+  ) {
+    this.eventsPublisher.publishToUser(userId, 'unread.changed', {
+      channelId,
+      total,
+      count,
+    });
   }
   emitMessageUpdated(channelId: string, message: unknown) {
-    this.eventsPublisher.publishToChannel(channelId, 'message.updated', message);
+    this.eventsPublisher.publishToChannel(
+      channelId,
+      'message.updated',
+      message,
+    );
   }
   emitMessageDeleted(channelId: string, messageId: string) {
-    this.eventsPublisher.publishToChannel(channelId, 'message.deleted', { id: messageId, channelId });
+    this.eventsPublisher.publishToChannel(channelId, 'message.deleted', {
+      id: messageId,
+      channelId,
+    });
   }
-  emitReactionChanged(channelId: string, messageId: string, reactions: { userId: string; emoji: string }[]) {
-    this.eventsPublisher.publishToChannel(channelId, 'reaction.changed', {messageId, reactions});
+  emitReactionChanged(
+    channelId: string,
+    messageId: string,
+    reactions: { userId: string; emoji: string }[],
+  ) {
+    this.eventsPublisher.publishToChannel(channelId, 'reaction.changed', {
+      messageId,
+      reactions,
+    });
   }
-  emitToUser(userId: string, event: string, data: any){
+  emitToUser(userId: string, event: string, data: any) {
     this.server.to(`user:${userId}`).emit(event, data);
   }
-   publishToChannel(channelId: string, event: string, payload: unknown): void {
+  publishToChannel(channelId: string, event: string, payload: unknown): void {
     this.eventsPublisher.publishToChannel(channelId, event, payload);
   }
 
